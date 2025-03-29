@@ -9,6 +9,7 @@ class AddTransactionScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
 
+
   const AddTransactionScreen(
       {Key? key, required this.accounts, required this.categories})
       : super(key: key);

@@ -28,6 +28,8 @@ class _MainScreenState extends State<MainScreen> {
   late List<Map<String, dynamic>> _categories;
   late List<Map<String, dynamic>> _transactions;
 
+  final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +52,10 @@ class _MainScreenState extends State<MainScreen> {
 
       if (result == true) {
         await fetchData();
+
+        // ✅ Recargar dashboard directamente
+        _dashboardKey.currentState?.reloadDashboard();
+
         setState(() => _currentIndex = 0);
       }
     } else {
@@ -74,14 +80,13 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final List<Widget> _pages = [
       DashboardScreen(
+        key: _dashboardKey,
         accounts: _accounts,
         categories: _categories,
         transactions: _transactions,
-        onRefresh: fetchData, // ✅ aquí se pasa la función de recarga
       ),
-
       ReportsScreen(),
-      const SizedBox(), // Espacio para el botón central
+      const SizedBox(),
       AccountsScreen(),
       SettingsScreen(),
     ];

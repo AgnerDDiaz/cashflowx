@@ -10,21 +10,24 @@ class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> categories;
-  final VoidCallback? onRefresh;
 
   const DashboardScreen({
     Key? key,
     required this.accounts,
     required this.transactions,
     required this.categories,
-    this.onRefresh,
   }) : super(key: key);
 
   @override
-  _DashboardScreenState createState() => _DashboardScreenState();
+  DashboardScreenState createState() => DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardScreenState extends State<DashboardScreen> {
+  // 👇 Añadir este método para que MainScreen pueda llamarlo
+  void reloadDashboard() {
+    _loadTransactions();
+  }
+
   DateTime selectedDate = DateTime.now();
   String selectedFilter = "Semanal";
   List<Map<String, dynamic>> transactions = [];
@@ -32,7 +35,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    widget.onRefresh?.call();
     _loadTransactions();
   }
 
