@@ -30,22 +30,19 @@ class _DateSelectorState extends State<DateSelector> {
 
   /// 📌 Formatea la fecha según el filtro actual
   String _formatDate(DateTime date, String filter) {
-    if (filter == 'Quincenal') {
-      int lastDay = DateTime(date.year, date.month + 1, 0).day;
-
-      if (date.day <= 15) {
-        return '1 - 15 ${DateFormat('MMM yyyy').format(date)}';
-      } else {
-        return '16 - $lastDay ${DateFormat('MMM yyyy').format(date)}';
-      }
-    } else if (filter == 'Mensual') {
+    if (filter == 'Semanal') {
+      DateTime start = date.subtract(Duration(days: date.weekday - 1)); // lunes
+      DateTime end = start.add(const Duration(days: 6)); // domingo
+      return "${DateFormat('d/MM').format(start)} ~ ${DateFormat('d/MM').format(end)}";
+    } else if (filter == 'Mensual' || filter == 'Calendario') {
       return DateFormat('MMMM yyyy').format(date);
-    } else if (filter == 'Calendario') {
-      return DateFormat('MMMM yyyy').format(date);
-    } else {
+    } else if (filter == 'Anual') {
       return DateFormat('yyyy').format(date);
+    } else {
+      return DateFormat('d MMM yyyy').format(date); // fallback
     }
   }
+
 
 
 
@@ -77,21 +74,8 @@ class _DateSelectorState extends State<DateSelector> {
   /// 📌 Método para cambiar la fecha con las flechas
   void _changeDate(bool next) {
     setState(() {
-      if (selectedFilter == 'Quincenal') {
-        if (selectedDate.day <= 15) {
-          if (!next) {
-            DateTime prevMonth = DateTime(selectedDate.year, selectedDate.month - 1, 16);
-            selectedDate = prevMonth;
-          } else {
-            selectedDate = DateTime(selectedDate.year, selectedDate.month, 16);
-          }
-        } else {
-          if (next) {
-            selectedDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
-          } else {
-            selectedDate = DateTime(selectedDate.year, selectedDate.month, 1);
-          }
-        }
+      if (selectedFilter == 'Semanal') {
+        selectedDate = selectedDate.add(Duration(days: next ? 7 : -7));
       } else if (selectedFilter == 'Mensual' || selectedFilter == 'Calendario') {
         selectedDate = DateTime(
           selectedDate.year,
@@ -110,13 +94,11 @@ class _DateSelectorState extends State<DateSelector> {
     widget.onDateChanged(selectedDate, selectedFilter);
   }
 
-
-
-
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+
         /// 📌 Selector de fecha con flechas
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -141,7 +123,7 @@ class _DateSelectorState extends State<DateSelector> {
         /// 📌 Selector de filtro (Diaria, Semanal, Calendario, Anual)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: ['Quincenal', 'Mensual', 'Calendario', 'Anual'].map((filter) {
+          children: ['Semanal', 'Mensual', 'Calendario', 'Anual'].map((filter) {
             return GestureDetector(
               onTap: () => _changeFilter(filter),
               child: Column(
@@ -164,7 +146,7 @@ class _DateSelectorState extends State<DateSelector> {
             );
           }).toList(),
         ),
-
+        const SizedBox(height: 4),
       ],
     );
   }

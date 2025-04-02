@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
+import '../widgets/annual_summary_view.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
@@ -12,7 +13,7 @@ class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> categories;
   static DateTime lastSelectedDate = DateTime.now();
-  static String lastSelectedFilter = "Quincenal"; // en lugar de "Semanal"
+  static String lastSelectedFilter = "Mensual"; // en lugar de "Semanal"
 
 
 
@@ -36,6 +37,8 @@ class DashboardScreenState extends State<DashboardScreen> {
   late String selectedFilter;
 
   List<Map<String, dynamic>> transactions = [];
+  List<Map<String, dynamic>> accounts = [];
+  List<Map<String, dynamic>> categories = [];
 
   @override
   void initState() {
@@ -80,13 +83,18 @@ class DashboardScreenState extends State<DashboardScreen> {
 
           ),
           _buildBalance(),
-      Expanded(
-        child: selectedFilter == "Calendario"
-            ? CalendarMonthView(
-            key: ValueKey(selectedDate),
-            selectedDate: selectedDate)
-            : _buildTransactionList(),
-      ),
+          Expanded(
+            child: selectedFilter == "Calendario"
+                ? CalendarMonthView(selectedDate: selectedDate)
+                : selectedFilter == "Anual"
+                ? AnnualSummaryView(
+                    selectedDate: selectedDate,
+                    accounts: accounts,
+                    categories: categories,
+                    transactions: transactions,
+                  )
+                : _buildTransactionList(),
+          ),
 
 
         ],
@@ -110,16 +118,11 @@ class DashboardScreenState extends State<DashboardScreen> {
     DateTime endDate;
 
     switch (selectedFilter) {
-      case 'Quincenal':
-        int day = selectedDate.day;
-        if (day <= 15) {
-          startDate = DateTime(selectedDate.year, selectedDate.month, 1);
-          endDate = DateTime(selectedDate.year, selectedDate.month, 16);
-        } else {
-          startDate = DateTime(selectedDate.year, selectedDate.month, 16);
-          endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
-        }
+      case 'Semanal':
+        startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1)); // Lunes
+        endDate = startDate.add(const Duration(days: 7));
         break;
+
 
       case 'Mensual':
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);

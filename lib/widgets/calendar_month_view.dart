@@ -78,6 +78,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     return Expanded(
       child: Column(
         children: [
+          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -114,11 +115,11 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
 
     return Container(
-      height: MediaQuery.of(context).size.height / 12,
+      height: MediaQuery.of(context).size.height / 11,
       margin: const EdgeInsets.all(2),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isCurrentMonth ? Colors.grey.shade200 : Colors.grey.shade300,
+        color: isCurrentMonth ? Colors.grey[200] : Colors.grey[400],
         borderRadius: BorderRadius.circular(4),
       ),
       child: Stack(
@@ -129,7 +130,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
               '${date.day}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: isCurrentMonth ? Colors.black : Colors.grey.shade600,
+                color: isCurrentMonth ? Colors.black : Colors.black,
               ),
             ),
           ),
@@ -141,7 +142,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
               children: [
                 Text("${data['income']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.green)),
                 Text("${data['expense']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.red)),
-                Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black)),
+                Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black, fontWeight: FontWeight.bold)),
               ],
             ),
           ),

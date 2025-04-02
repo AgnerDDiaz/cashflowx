@@ -38,6 +38,28 @@ class _MainScreenState extends State<MainScreen> {
     _transactions = List<Map<String, dynamic>>.from(widget.transactions);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final settings = ModalRoute.of(context)?.settings;
+    if (settings is RouteSettings && settings.arguments is Map) {
+      final args = settings.arguments as Map;
+      if (args.containsKey('filter') && args.containsKey('date')) {
+        DashboardScreen.lastSelectedFilter = args['filter'];
+        DashboardScreen.lastSelectedDate = args['date'];
+
+        _currentIndex = 0;
+
+        // ⚠️ Ejecutamos fetchData después de recibir los argumentos
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          fetchData();
+        });
+      }
+    }
+  }
+
+
   void _onTabTapped(int index) async {
     if (index == 2) {
       final result = await Navigator.push(
@@ -52,10 +74,7 @@ class _MainScreenState extends State<MainScreen> {
 
       if (result == true) {
         await fetchData();
-
-        // ✅ Recargar dashboard directamente
         _dashboardKey.currentState?.reloadDashboard();
-
         setState(() => _currentIndex = 0);
       }
     } else {

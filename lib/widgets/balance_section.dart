@@ -25,18 +25,10 @@ class BalanceSection extends StatelessWidget {
 
         Container(
 
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                title, // 📌 Título dinámico
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
