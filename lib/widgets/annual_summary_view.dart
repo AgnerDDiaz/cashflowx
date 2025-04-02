@@ -115,93 +115,101 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
         final end = DateTime(widget.selectedDate.year, month + 1, 0);
         final monthLabel = DateFormat.MMMM().format(start);
 
-        return ExpansionTile(
-          trailing: const SizedBox.shrink(),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          onExpansionChanged: (expanded) {
-            setState(() {
-              _expandedMonth = expanded ? month : null;
-            });
-          },
-          initiallyExpanded: _expandedMonth == month,
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return Column(
+          children: [
+            ExpansionTile(
+              trailing: const SizedBox.shrink(),
+              tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              onExpansionChanged: (expanded) {
+                setState(() {
+                  _expandedMonth = expanded ? month : null;
+                });
+              },
+              initiallyExpanded: _expandedMonth == month,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("${start.day}/${start.month} ~ ${end.day}/${end.month}",
-                      style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                  Text(monthLabel,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("+ \$${summary['income']!.toStringAsFixed(2)}",
-                          style: const TextStyle(fontSize: 10, color: Colors.green)),
-                      const SizedBox(width: 6),
-                      Text("- \$${summary['expense']!.toStringAsFixed(2)}",
-                          style: const TextStyle(fontSize: 10, color: Colors.red)),
+                      Text("${start.day}/${start.month} ~ ${end.day}/${end.month}",
+                          style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(monthLabel,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  Text("\$${summary['balance']!.toStringAsFixed(2)}",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        children: [
+                          Text("+ \$${summary['income']!.toStringAsFixed(2)}",
+                              style: const TextStyle(fontSize: 10, color: Colors.green)),
+                          const SizedBox(width: 6),
+                          Text("- \$${summary['expense']!.toStringAsFixed(2)}",
+                              style: const TextStyle(fontSize: 10, color: Colors.red)),
+                        ],
+                      ),
+                      Text("\$${summary['balance']!.toStringAsFixed(2)}",
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
-          children: weeklySummary[month]?.map((week) {
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MainScreen(
-                      accounts: widget.accounts,
-                      categories: widget.categories,
-                      transactions: widget.transactions,
-                    ),
-                    settings: RouteSettings(arguments: {
-                      'filter': 'Semanal',
-                      'date': week['start'],
-                    }),
-                  ),
-                );
-
-
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: weeklySummary[month]?.map((week) {
+                return Column(
                   children: [
-                    Text(week['range'],
-                        style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Row(
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MainScreen(
+                              accounts: widget.accounts,
+                              categories: widget.categories,
+                              transactions: widget.transactions,
+                            ),
+                            settings: RouteSettings(arguments: {
+                              'filter': 'Semanal',
+                              'date': week['start'],
+                            }),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("+ \$${week['income'].toStringAsFixed(2)}",
-                                style: const TextStyle(fontSize: 10, color: Colors.green)),
-                            const SizedBox(width: 6),
-                            Text("- \$${week['expense'].toStringAsFixed(2)}",
-                                style: const TextStyle(fontSize: 10, color: Colors.red)),
+                            Text(week['range'],
+                                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text("+ \$${week['income'].toStringAsFixed(2)}",
+                                        style: const TextStyle(fontSize: 10, color: Colors.green)),
+                                    const SizedBox(width: 6),
+                                    Text("- \$${week['expense'].toStringAsFixed(2)}",
+                                        style: const TextStyle(fontSize: 10, color: Colors.red)),
+                                  ],
+                                ),
+                                Text("\$${week['balance'].toStringAsFixed(2)}",
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              ],
+                            ),
                           ],
                         ),
-                        Text("\$${week['balance'].toStringAsFixed(2)}",
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
-                      ],
+                      ),
                     ),
+                    const Divider(thickness: 1, height: 1), // ✅ Divider entre semanas
                   ],
-                ),
-              ),
-            );
-          }).toList() ?? [],
+                );
+              }).toList() ?? [],
+            ),
+            if (month != 12) const Divider(thickness: 1, height: 1), // ✅ Divider entre meses
+          ],
         );
       },
     );
