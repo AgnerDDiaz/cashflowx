@@ -87,6 +87,18 @@ class DatabaseHelper {
 
 
     await db.execute('''
+        CREATE TABLE presupuestos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      categoria_id INTEGER NOT NULL,
+      monto_maximo REAL NOT NULL,
+      periodo TEXT NOT NULL, -- (mensual, semanal, anual)
+      fecha_creacion TEXT NOT NULL,
+      FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+    )
+  ''');
+
+
+    await db.execute('''
     CREATE TABLE settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       main_currency TEXT NOT NULL,

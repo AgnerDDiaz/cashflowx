@@ -10,6 +10,10 @@ class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> categories;
+  static DateTime lastSelectedDate = DateTime.now();
+  static String lastSelectedFilter = "Quincenal"; // en lugar de "Semanal"
+
+
 
   const DashboardScreen({
     Key? key,
@@ -27,16 +31,19 @@ class DashboardScreenState extends State<DashboardScreen> {
   void reloadDashboard() {
     _loadTransactions();
   }
+  late DateTime selectedDate;
+  late String selectedFilter;
 
-  DateTime selectedDate = DateTime.now();
-  String selectedFilter = "Semanal";
   List<Map<String, dynamic>> transactions = [];
 
   @override
   void initState() {
     super.initState();
+    selectedDate = DashboardScreen.lastSelectedDate;
+    selectedFilter = DashboardScreen.lastSelectedFilter;
     _loadTransactions();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +62,13 @@ class DashboardScreenState extends State<DashboardScreen> {
               setState(() {
                 selectedDate = newDate;
                 selectedFilter = newFilter;
+
+                DashboardScreen.lastSelectedDate = newDate;
+                DashboardScreen.lastSelectedFilter = newFilter;
               });
               _loadTransactions();
             },
+
           ),
           _buildBalance(),
           Expanded(child: _buildTransactionList()),
@@ -82,22 +93,32 @@ class DashboardScreenState extends State<DashboardScreen> {
     DateTime endDate;
 
     switch (selectedFilter) {
-      case 'Diaria':
-        startDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-        endDate = startDate.add(const Duration(days: 1));
+      case 'Quincenal':
+        int day = selectedDate.day;
+        if (day <= 15) {
+          startDate = DateTime(selectedDate.year, selectedDate.month, 1);
+          endDate = DateTime(selectedDate.year, selectedDate.month, 16);
+        } else {
+          startDate = DateTime(selectedDate.year, selectedDate.month, 16);
+          endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
+        }
         break;
-      case 'Semanal':
-        startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
-        endDate = startDate.add(const Duration(days: 6));
+
+      case 'Mensual':
+        startDate = DateTime(selectedDate.year, selectedDate.month, 1);
+        endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
+
       case 'Calendario':
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);
         endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
+
       case 'Anual':
         startDate = DateTime(selectedDate.year, 1, 1);
         endDate = DateTime(selectedDate.year + 1, 1, 1);
         break;
+
       default:
         return false;
     }
@@ -143,9 +164,26 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: Text(
-                entry.key,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    entry.key,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  Text(
+                    _getBalanceText(entry.value),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _getBalanceColor(entry.value),
+                    ),
+                  ),
+                ],
               ),
             ),
             ...entry.value.map((transaction) {
@@ -167,9 +205,11 @@ class DashboardScreenState extends State<DashboardScreen> {
                 onTransactionUpdated: _loadTransactions,
               );
             }).toList(),
+            const SizedBox(height: 12), // 👉 Espacio entre días
           ],
         );
       }).toList(),
+
     );
   }
 
@@ -186,4 +226,31 @@ class DashboardScreenState extends State<DashboardScreen> {
             (acc) => acc['id'] == accountId, orElse: () => {'name': 'Desconocida'});
     return account['name'];
   }
+
+  String _getBalanceText(List<Map<String, dynamic>> transactions) {
+    double income = transactions
+        .where((t) => t['type'] == 'income')
+        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+
+    double expense = transactions
+        .where((t) => t['type'] == 'expense')
+        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+
+    double balance = income - expense;
+
+    return "\$${balance.toStringAsFixed(2)}";
+  }
+
+  Color _getBalanceColor(List<Map<String, dynamic>> transactions) {
+    double income = transactions
+        .where((t) => t['type'] == 'income')
+        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+
+    double expense = transactions
+        .where((t) => t['type'] == 'expense')
+        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+
+    return (income - expense) >= 0 ? Colors.green : Colors.red;
+  }
+
 }
