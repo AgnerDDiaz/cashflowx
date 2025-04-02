@@ -114,40 +114,59 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
     final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
 
-    return Container(
-      height: MediaQuery.of(context).size.height / 11,
-      margin: const EdgeInsets.all(2),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isCurrentMonth ? Colors.grey[200] : Colors.grey[400],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          final monday = date.subtract(Duration(days: date.weekday - 1));
+          Navigator.pushReplacementNamed(
+            context,
+            '/',
+            arguments: {
+              'filter': 'Semanal',
+              'date': monday,
+            },
+          );
+        },
         borderRadius: BorderRadius.circular(4),
-      ),
-      child: Stack(
-        children: [
-          Align(
-            alignment: Alignment.topLeft,
-            child: Text(
-              '${date.day}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isCurrentMonth ? Colors.black : Colors.black,
+        splashColor: Colors.black12,
+        child: Container(
+          height: MediaQuery.of(context).size.height / 11,
+          margin: const EdgeInsets.all(2),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isCurrentMonth ? Colors.grey[200] : Colors.grey[400],
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: Text(
+                  '${date.day}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isCurrentMonth ? Colors.black : Colors.black,
+                  ),
+                ),
               ),
-            ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("${data['income']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.green)),
+                    Text("${data['expense']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.red)),
+                    Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text("${data['income']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.green)),
-                Text("${data['expense']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.red)),
-                Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+
 }

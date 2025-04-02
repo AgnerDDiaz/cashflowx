@@ -179,55 +179,72 @@ class DashboardScreenState extends State<DashboardScreen> {
 
     return ListView(
       children: transactionsByDate.entries.map((entry) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    entry.key,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  Text(
-                    _getBalanceText(entry.value),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _getBalanceColor(entry.value),
-                    ),
-                  ),
-                ],
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AddTransactionScreen(
+                  accounts: widget.accounts,
+                  categories: widget.categories,
+                ),
+                settings: RouteSettings(arguments: {
+                  'date': DateTime.parse(entry.key),
+                }),
               ),
-            ),
-            ...entry.value.map((transaction) {
-              String categoryName = _getCategoryName(transaction['category_id']);
-              String accountName = _getAccountName(transaction['account_id']);
-              String linkedAccountName = transaction['linked_account_id'] != null
-                  ? _getAccountName(transaction['linked_account_id'])
-                  : '';
+            ).then((_) => _loadTransactions());
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      entry.key,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    Text(
+                      _getBalanceText(entry.value),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _getBalanceColor(entry.value),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...entry.value.map((transaction) {
+                String categoryName = _getCategoryName(transaction['category_id']);
+                String accountName = _getAccountName(transaction['account_id']);
+                String linkedAccountName = transaction['linked_account_id'] != null
+                    ? _getAccountName(transaction['linked_account_id'])
+                    : '';
 
-              if (transaction['type'] == 'transfer') {
-                categoryName = "Transferencia";
-                accountName = "$accountName → $linkedAccountName";
-              }
+                if (transaction['type'] == 'transfer') {
+                  categoryName = "Transferencia";
+                  accountName = "$accountName → $linkedAccountName";
+                }
 
-              return TransactionItem(
-                transaction: transaction,
-                accounts: widget.accounts,
-                categories: widget.categories,
-                onTransactionUpdated: _loadTransactions,
-              );
-            }).toList(),
-            const SizedBox(height: 12), // 👉 Espacio entre días
-          ],
+                return TransactionItem(
+                  transaction: transaction,
+                  accounts: widget.accounts,
+                  categories: widget.categories,
+                  onTransactionUpdated: _loadTransactions,
+                );
+              }).toList(),
+              const SizedBox(height: 12),
+            ],
+          ),
         );
+
       }).toList(),
 
     );

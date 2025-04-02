@@ -39,6 +39,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null && args.containsKey('date')) {
+      selectedDate = args['date'];
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text("Agregar Transacción")),
       body: Padding(
