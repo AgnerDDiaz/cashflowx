@@ -20,6 +20,14 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     _loadMonthlyData();
   }
 
+  @override
+  void didUpdateWidget(CalendarMonthView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      _loadMonthlyData();
+    }
+  }
+
   Future<void> _loadMonthlyData() async {
     final db = DatabaseHelper();
     final allTransactions = await db.getTransactions();
@@ -32,7 +40,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     for (var t in allTransactions) {
       final dateStr = t['date'].split(' ')[0];
       final date = DateTime.parse(dateStr);
-      if (date.isBefore(start) || date.isAfter(end)) continue;
+      if (date.isBefore(start.subtract(const Duration(days: 7))) || date.isAfter(end.add(const Duration(days: 7)))) continue;
 
       summary.putIfAbsent(dateStr, () => {'income': 0, 'expense': 0, 'balance': 0});
 
@@ -52,80 +60,93 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
   @override
   Widget build(BuildContext context) {
     final firstDayOfMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
-    final totalDays = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0).day;
-    final firstWeekday = firstDayOfMonth.weekday % 7; // lunes = 1 => 1
+    final totalDaysInMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0).day;
+    final firstWeekday = (firstDayOfMonth.weekday + 6) % 7; // lunes = 0
+
+    final prevMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month - 1, 1);
+    final daysInPrevMonth = DateTime(prevMonth.year, prevMonth.month + 1, 0).day;
 
     List<Widget> rows = [];
-    int day = 1;
-    for (int week = 0; week < 6; week++) {
-      List<Widget> days = [];
-      for (int i = 0; i < 7; i++) {
-        if (week == 0 && i < firstWeekday) {
-          days.add(_emptyCell());
-        } else if (day > totalDays) {
-          days.add(_emptyCell());
-        } else {
-          days.add(_buildDayCell(day));
-          day++;
-        }
-      }
-      rows.add(Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: days));
+    int totalCells = 42; // 6 weeks * 7 days
+
+    for (int i = 0; i < totalCells; i += 7) {
+      rows.add(Row(
+        children: List.generate(7, (j) => Expanded(child: _buildDayCell(i + j, firstWeekday, totalDaysInMonth, daysInPrevMonth))),
+      ));
     }
 
-    return Column(
-      children: [
-        const SizedBox(height: 10),
-        Text(
-          DateFormat('MMMM yyyy').format(widget.selectedDate),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-              .map((d) => Expanded(
-            child: Center(child: Text(d, style: TextStyle(fontWeight: FontWeight.bold))),
-          ))
-              .toList(),
-        ),
-        const SizedBox(height: 4),
-        ...rows,
-      ],
-    );
-  }
-
-  Widget _buildDayCell(int day) {
-    final date = DateTime(widget.selectedDate.year, widget.selectedDate.month, day);
-    final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
-
     return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Column(
-          children: [
-            Text("$day", style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text("${data['income']!.toStringAsFixed(0)}",
-                style: const TextStyle(color: Colors.blue, fontSize: 10)),
-            Text("${data['expense']!.toStringAsFixed(0)}",
-                style: const TextStyle(color: Colors.red, fontSize: 10)),
-            Text("${data['balance']!.toStringAsFixed(0)}",
-                style: TextStyle(
-                  color: data['balance']! >= 0 ? Colors.green : Colors.red,
-                  fontSize: 10,
-                )),
-          ],
-        ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+                .map((d) => Expanded(
+              child: Center(
+                  child: Text(d,
+                      style: TextStyle(fontWeight: FontWeight.bold))),
+            ))
+                .toList(),
+          ),
+          const SizedBox(height: 4),
+          ...rows,
+        ],
       ),
     );
   }
 
-  Widget _emptyCell() {
-    return Expanded(child: Container(margin: const EdgeInsets.all(2)));
+  Widget _buildDayCell(int index, int firstWeekday, int totalDaysInMonth, int daysInPrevMonth) {
+    int dayNum = index - firstWeekday + 1;
+    DateTime date;
+    bool isCurrentMonth = true;
+
+    if (dayNum < 1) {
+      isCurrentMonth = false;
+      date = DateTime(widget.selectedDate.year, widget.selectedDate.month - 1, daysInPrevMonth + dayNum);
+    } else if (dayNum > totalDaysInMonth) {
+      isCurrentMonth = false;
+      date = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, dayNum - totalDaysInMonth);
+    } else {
+      date = DateTime(widget.selectedDate.year, widget.selectedDate.month, dayNum);
+    }
+
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
+
+    return Container(
+      height: MediaQuery.of(context).size.height / 12,
+      margin: const EdgeInsets.all(2),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isCurrentMonth ? Colors.grey.shade200 : Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              '${date.day}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isCurrentMonth ? Colors.black : Colors.grey.shade600,
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text("${data['income']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.green)),
+                Text("${data['expense']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.red)),
+                Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

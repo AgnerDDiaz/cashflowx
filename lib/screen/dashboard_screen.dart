@@ -50,7 +50,15 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CashFlowX 💸', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 4,)),
+        title: const Text(
+            'CashFlowX 💸',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+              letterSpacing: 4
+            ),
+        ),
         centerTitle: true,
         elevation: 0,
       ),
@@ -74,7 +82,9 @@ class DashboardScreenState extends State<DashboardScreen> {
           _buildBalance(),
       Expanded(
         child: selectedFilter == "Calendario"
-            ? CalendarMonthView(selectedDate: selectedDate)
+            ? CalendarMonthView(
+            key: ValueKey(selectedDate),
+            selectedDate: selectedDate)
             : _buildTransactionList(),
       ),
 

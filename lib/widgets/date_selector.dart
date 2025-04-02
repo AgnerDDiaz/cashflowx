@@ -79,30 +79,37 @@ class _DateSelectorState extends State<DateSelector> {
     setState(() {
       if (selectedFilter == 'Quincenal') {
         if (selectedDate.day <= 15) {
-          // Si estás en la primera quincena y vas atrás → ir a la segunda quincena del mes anterior
           if (!next) {
             DateTime prevMonth = DateTime(selectedDate.year, selectedDate.month - 1, 16);
             selectedDate = prevMonth;
           } else {
-            // Primera quincena → pasar a segunda quincena del mismo mes
             selectedDate = DateTime(selectedDate.year, selectedDate.month, 16);
           }
         } else {
-          // Si estás en la segunda quincena
           if (next) {
-            // Segunda quincena → ir a primera del mes siguiente
             selectedDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
           } else {
-            // Segunda quincena → volver a primera del mismo mes
             selectedDate = DateTime(selectedDate.year, selectedDate.month, 1);
           }
         }
+      } else if (selectedFilter == 'Mensual' || selectedFilter == 'Calendario') {
+        selectedDate = DateTime(
+          selectedDate.year,
+          selectedDate.month + (next ? 1 : -1),
+          1,
+        );
+      } else if (selectedFilter == 'Anual') {
+        selectedDate = DateTime(
+          selectedDate.year + (next ? 1 : -1),
+          1,
+          1,
+        );
       }
-
     });
 
     widget.onDateChanged(selectedDate, selectedFilter);
   }
+
 
 
 
