@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../widgets/balance_section.dart';
+import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
 import '../widgets/date_selector.dart';
 import 'add_transaction_screen.dart';
@@ -71,7 +72,13 @@ class DashboardScreenState extends State<DashboardScreen> {
 
           ),
           _buildBalance(),
-          Expanded(child: _buildTransactionList()),
+      Expanded(
+        child: selectedFilter == "Calendario"
+            ? CalendarMonthView(selectedDate: selectedDate)
+            : _buildTransactionList(),
+      ),
+
+
         ],
       ),
     );
