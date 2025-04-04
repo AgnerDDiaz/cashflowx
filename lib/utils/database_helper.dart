@@ -138,125 +138,125 @@ class DatabaseHelper {
   }
 
   Future<void> insertDefaultAccounts(Database db) async {
+    // 📦 Insertar Cuentas de Prueba Mejoradas
     List<Map<String, dynamic>> testAccounts = [
       {
         'name': 'Cuenta Banreservas',
         'type': 'normal',
         'category': 'Cuentas personales',
-        'balance': 5046.00,
+        'balance': 46.0,
         'currency': 'DOP',
         'balance_mode': 'default',
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Cuenta Popular (carrito)',
         'type': 'normal',
         'category': 'Cuentas personales',
-        'balance': 2260.00,
+        'balance': 2260.0,
         'currency': 'DOP',
         'balance_mode': 'default',
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
-        'name': 'Cuenta del BHD (SamTech)',
+        'name': 'Cuenta BHD (SamTech)',
         'type': 'normal',
         'category': 'Cuentas del negocio',
-        'balance': 3067.00,
+        'balance': 13067.0,
         'currency': 'DOP',
         'balance_mode': 'default',
-        'visible': 0, // Oculta
-        'include_in_balance': 0
+        'include_in_balance': 1,
+        'visible': 1,
       },
       {
         'name': 'Tarjeta gold Banreservas',
         'type': 'credit',
-        'category': 'Tarjetas de credito',
+        'category': 'Tarjetas de crédito',
         'balance': 21324.55,
         'currency': 'DOP',
         'balance_mode': 'credit',
-        'max_credit': 21324.55,
-        'due_date': '23',
-        'cutoff_date': '1',
-        'penalty_fixed': 250.00,
-        'penalty_rate': 5.00,
+        'max_credit': 50000.0,
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Cuenta BHD (conjunta)',
         'type': 'credit',
-        'category': 'Tarjetas de credito',
+        'category': 'Tarjetas de crédito',
         'balance': 365.00,
         'currency': 'DOP',
         'balance_mode': 'credit',
-        'max_credit': 365.00,
-        'due_date': '15',
-        'cutoff_date': '28',
-        'penalty_rate': 3.00,
+        'max_credit': 10000.0,
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Tarjeta de crédito personal',
         'type': 'credit',
-        'category': 'Tarjetas de credito',
+        'category': 'Tarjetas de crédito',
         'balance': 409.00,
         'currency': 'DOP',
         'balance_mode': 'credit',
-        'max_credit': 50000.00,
-        'due_date': '10',
-        'cutoff_date': '25',
-        'penalty_fixed': 200.00,
-        'penalty_rate': 4.00,
+        'max_credit': 50000.0,
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Deuda a Eleanny',
         'type': 'debt',
         'category': 'Deudas',
-        'balance': -4658.76,
+        'balance': 5758.76,
         'currency': 'USD',
         'balance_mode': 'credit',
-        'due_date': '30',
-        'penalty_rate': 1.5,
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Ahorro en monedas',
         'type': 'saving',
         'category': 'Ahorros',
-        'balance': 475.00,
-        'currency': 'DOP',
-        'interest_rate': 2.00,
-        'interest_period': 'mensual',
-        'penalty_rate': 0.5,
-        'balance_mode': 'debit',
+        'balance': 300.00,
+        'currency': 'EUR',
+        'balance_mode': 'default',
+        'interest_rate': 2.5,
+        'interest_period': 'anual',
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
       },
       {
         'name': 'Fondo de emergencia',
         'type': 'saving',
         'category': 'Ahorros',
-        'balance': 4869.00,
+        'balance': 5044.00,
         'currency': 'DOP',
-        'interest_rate': 2.00,
+        'balance_mode': 'default',
+        'interest_rate': 1.5,
         'interest_period': 'anual',
-        'penalty_rate': 0.5,
-        'balance_mode': 'debit',
+        'include_in_balance': 1,
         'visible': 1,
-        'include_in_balance': 1
-      }
+      },
     ];
-
-// Inserción (dentro del _onCreate o una función inicial):
-    for (var account in testAccounts) {
-      await db.insert('accounts', account);
+    for (var acc in testAccounts) {
+      await db.insert('accounts', acc);
     }
+
+// 📦 Insertar tasas de cambio de prueba (si no lo has puesto ya)
+    await db.insert('exchange_rates', {
+      'base_currency': 'USD',
+      'target_currency': 'DOP',
+      'rate': 58.5,
+      'last_updated': '2025-04-03',
+    });
+    await db.insert('exchange_rates', {
+      'base_currency': 'EUR',
+      'target_currency': 'DOP',
+      'rate': 63.75,
+      'last_updated': '2025-04-03',
+    });
+
+
 
     // 📌 Insertar Transacciones de Prueba
     await insertTestTransactions(db);
@@ -392,6 +392,30 @@ class DatabaseHelper {
         await db.insert('transactions', transaction);
     }
   }
+
+  // ✅ Obtener tasa de cambio de una moneda a otra
+  Future<double> getExchangeRate(String baseCurrency, String targetCurrency) async {
+    final db = await database;
+
+    // Si las monedas son iguales, no hay conversión
+    if (baseCurrency == targetCurrency) {
+      return 1.0;
+    }
+
+    final result = await db.query(
+      'exchange_rates',
+      where: 'base_currency = ? AND target_currency = ?',
+      whereArgs: [baseCurrency, targetCurrency],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      throw Exception('No se encontró tasa de cambio de $baseCurrency a $targetCurrency');
+    }
+
+    return result.first['rate'] as double;
+  }
+
 
 
 

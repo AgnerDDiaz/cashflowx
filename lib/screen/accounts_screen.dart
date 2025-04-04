@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../widgets/balance_section.dart';
-import '../widgets/account_widgets.dart';
+import '../widgets/account_widgets.dart'; // 👈 nuestros widgets nuevos
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
 
   @override
-  State<AccountsScreen> createState() => AccountsScreenState();
+  State<AccountsScreen> createState() => _AccountsScreenState();
 }
 
-class AccountsScreenState extends State<AccountsScreen> {
+class _AccountsScreenState extends State<AccountsScreen> {
   List<Map<String, dynamic>> accounts = [];
-  bool isLoading = true; // 🌀 Para mostrar el loader mientras carga
+  String mainCurrency = 'DOP'; // 🔥 En el futuro lo leeremos desde Settings
 
   @override
   void initState() {
@@ -22,44 +22,48 @@ class AccountsScreenState extends State<AccountsScreen> {
   }
 
   Future<void> _loadAccounts() async {
-    setState(() => isLoading = true);
     final db = DatabaseHelper();
     List<Map<String, dynamic>> result = await db.getAccounts();
-    await Future.delayed(const Duration(milliseconds: 300)); // Simular un pequeño delay
-    setState(() {
-      accounts = result;
-      isLoading = false;
-    });
+    setState(() => accounts = result);
   }
 
-  void reloadAccounts() {
-    _loadAccounts();
+  Future<double> _getTotalCapital() async {
+    final db = DatabaseHelper();
+    double total = 0.0;
+    for (final account in accounts) {
+      if (account['include_in_balance'] == 1 && account['balance_mode'] != 'credit') {
+        final balance = account['balance'] as double;
+        final accountCurrency = account['currency'] as String;
+        final rate = await db.getExchangeRate(accountCurrency, mainCurrency);
+        total += balance * rate;
+      }
+    }
+    return total;
   }
 
-  double _getTotalCapital() {
-    return accounts
-        .where((a) => a['include_in_balance'] == 1 && a['balance_mode'] != 'credit')
-        .fold(0.0, (sum, a) => sum + (a['balance'] as double));
+  Future<double> _getTotalDebt() async {
+    final db = DatabaseHelper();
+    double total = 0.0;
+    for (final account in accounts) {
+      if (account['include_in_balance'] == 1 && account['balance_mode'] == 'credit') {
+        final balance = account['balance'] as double;
+        final accountCurrency = account['currency'] as String;
+        final rate = await db.getExchangeRate(accountCurrency, mainCurrency);
+        total += balance * rate;
+      }
+    }
+    return total;
   }
 
-  double _getTotalDebt() {
-    return accounts
-        .where((a) => a['include_in_balance'] == 1 && a['balance_mode'] == 'credit')
-        .fold(0.0, (sum, a) => sum - (a['balance'] as double));
-  }
-
-  double _getTotalBalance() {
-    return _getTotalCapital() - _getTotalDebt();
+  Future<double> _getTotalBalance() async {
+    final capital = await _getTotalCapital();
+    final debt = await _getTotalDebt();
+    return capital - debt;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
+    // Agrupar cuentas por categoría
     final Map<String, List<Map<String, dynamic>>> categoryMap = {};
     for (final account in accounts) {
       final category = account['category'] ?? 'Sin categoría';
@@ -83,38 +87,45 @@ class AccountsScreenState extends State<AccountsScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          BalanceSection(
-            totalIncome: _getTotalCapital(),
-            totalExpenses: _getTotalDebt(),
-            totalBalance: _getTotalBalance(),
-            title: "Resumen de cuentas",
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadAccounts, // 👈 Se actualiza al deslizar hacia abajo
-              child: ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: categoryMap.entries.length,
-                itemBuilder: (context, index) {
-                  final entry = categoryMap.entries.elementAt(index);
-                  final category = entry.key;
-                  final categoryAccounts = entry.value;
+      body: FutureBuilder(
+        future: Future.wait([
+          _getTotalCapital(),
+          _getTotalDebt(),
+          _getTotalBalance(),
+        ]),
+        builder: (context, AsyncSnapshot<List<double>> snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                  final visibleAccounts = categoryAccounts.where((acc) => acc['visible'] == 1).toList();
-                  final totalBalance = visibleAccounts.fold<double>(
-                    0.0,
-                        (sum, acc) {
-                      final balance = acc['balance'] as double;
-                      return acc['balance_mode'] == 'credit' ? sum - balance : sum + balance;
-                    },
-                  );
+          final totalIncome = snapshot.data![0];
+          final totalExpenses = snapshot.data![1];
+          final totalBalance = snapshot.data![2];
 
-                  return AnimatedOpacity(
-                    opacity: 1.0,
-                    duration: const Duration(milliseconds: 500),
-                    child: Column(
+          return Column(
+            children: [
+              BalanceSection(
+                totalIncome: totalIncome,
+                totalExpenses: totalExpenses,
+                totalBalance: totalBalance,
+                title: "Resumen de cuentas",
+              ),
+              Expanded(
+                child: ListView(
+                  children: categoryMap.entries.map((entry) {
+                    final category = entry.key;
+                    final categoryAccounts = entry.value;
+
+                    final visibleAccounts = categoryAccounts.where((acc) => acc['visible'] == 1).toList();
+                    final totalBalance = visibleAccounts.fold<double>(
+                      0.0,
+                          (sum, acc) {
+                        final balance = acc['balance'] as double;
+                        return acc['balance_mode'] == 'credit' ? sum - balance : sum + balance;
+                      },
+                    );
+
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AccountCategoryHeader(
@@ -133,7 +144,7 @@ class AccountsScreenState extends State<AccountsScreen> {
                               currency: account['currency'],
                               visible: account['visible'] == 1,
                               onTap: () {
-                                // Navegar al detalle de tarjeta de crédito
+                                // 🔥 Navegar al detalle de tarjeta de crédito
                               },
                             );
                           } else {
@@ -143,20 +154,20 @@ class AccountsScreenState extends State<AccountsScreen> {
                               currency: account['currency'],
                               visible: account['visible'] == 1,
                               onTap: () {
-                                // Navegar al detalle de cuenta
+                                // 🔥 Navegar al detalle de cuenta normal
                               },
                             );
                           }
                         }).toList(),
                         const SizedBox(height: 12),
                       ],
-                    ),
-                  );
-                },
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
