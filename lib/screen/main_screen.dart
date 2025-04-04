@@ -29,6 +29,7 @@ class _MainScreenState extends State<MainScreen> {
   late List<Map<String, dynamic>> _transactions;
 
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
+  final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey(); // 👈 NUEVO
 
   @override
   void initState() {
@@ -41,7 +42,6 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
     final settings = ModalRoute.of(context)?.settings;
     if (settings is RouteSettings && settings.arguments is Map) {
       final args = settings.arguments as Map;
@@ -51,14 +51,12 @@ class _MainScreenState extends State<MainScreen> {
 
         _currentIndex = 0;
 
-        // ⚠️ Ejecutamos fetchData después de recibir los argumentos
         WidgetsBinding.instance.addPostFrameCallback((_) {
           fetchData();
         });
       }
     }
   }
-
 
   void _onTabTapped(int index) async {
     if (index == 2) {
@@ -75,7 +73,8 @@ class _MainScreenState extends State<MainScreen> {
       if (result == true) {
         await fetchData();
         _dashboardKey.currentState?.reloadDashboard();
-        setState(() => _currentIndex = 0);
+        _accountsKey.currentState?.reloadAccounts(); // 👈 ACTUALIZA cuentas también
+        setState(() => _currentIndex = 0); // Regresar a dashboard
       }
     } else {
       setState(() => _currentIndex = index);
@@ -106,7 +105,9 @@ class _MainScreenState extends State<MainScreen> {
       ),
       ReportsScreen(),
       const SizedBox(),
-      AccountsScreen(),
+      AccountsScreen(
+        key: _accountsKey, // 👈 Aquí pasamos el key
+      ),
       SettingsScreen(),
     ];
 

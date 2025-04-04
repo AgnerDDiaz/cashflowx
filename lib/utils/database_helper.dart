@@ -23,22 +23,25 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4, // Incrementamos la versión para forzar recreación
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute("ALTER TABLE accounts ADD COLUMN interest_rate REAL DEFAULT 0");
-        }
-        if (oldVersion < 4) {
-          await db.execute("ALTER TABLE transactions ADD COLUMN note TEXT DEFAULT NULL");
+        if (oldVersion < 5) {
+          await db.execute('''
+            CREATE TABLE exchange_rates (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              base_currency TEXT NOT NULL,
+              target_currency TEXT NOT NULL,
+              rate REAL NOT NULL,
+              last_updated TEXT NOT NULL
+            );
+          ''');
         }
       },
-
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    // 🛠️ Creación de Tablas
     await db.execute('''
     CREATE TABLE accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,10 +56,22 @@ class DatabaseHelper {
       penalty_fixed REAL DEFAULT 0,
       due_date TEXT DEFAULT NULL,
       cutoff_date TEXT DEFAULT NULL,
-      balance_mode TEXT NOT NULL CHECK (balance_mode IN ('debit', 'credit', 'default')) DEFAULT 'default'
+      balance_mode TEXT NOT NULL CHECK (balance_mode IN ('debit', 'credit', 'default')) DEFAULT 'default',
+      max_credit REAL DEFAULT NULL,
+      visible INTEGER DEFAULT 1,
+      include_in_balance INTEGER DEFAULT 1
+    );
+    ''');
 
-    )
-  ''');
+    await db.execute('''
+    CREATE TABLE exchange_rates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      base_currency TEXT NOT NULL,
+      target_currency TEXT NOT NULL,
+      rate REAL NOT NULL,
+      last_updated TEXT NOT NULL
+    );
+    ''');
 
     await db.execute('''
     CREATE TABLE categories (
@@ -65,38 +80,36 @@ class DatabaseHelper {
       type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
       parent_id INTEGER DEFAULT NULL,
       FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE CASCADE
-    )
-  ''');
+    );
+    ''');
 
     await db.execute('''
     CREATE TABLE transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      account_id INTEGER NOT NULL, -- Cuenta de origen
-      linked_account_id INTEGER, -- Cuenta de destino (nullable)
+      account_id INTEGER NOT NULL,
+      linked_account_id INTEGER,
       type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
-      amount REAL NOT NULL CHECK (amount > 0), -- Evita montos negativos
+      amount REAL NOT NULL CHECK (amount > 0),
       category_id INTEGER DEFAULT NULL,
       date TEXT NOT NULL,
       note TEXT DEFAULT NULL,
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
       FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-      CHECK (type <> 'transfer' OR linked_account_id IS NOT NULL) -- Verifica que las transferencias tengan cuenta destino
-    )
-  ''');
-
+      CHECK (type <> 'transfer' OR linked_account_id IS NOT NULL)
+    );
+    ''');
 
     await db.execute('''
-        CREATE TABLE presupuestos (
+    CREATE TABLE presupuestos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       categoria_id INTEGER NOT NULL,
       monto_maximo REAL NOT NULL,
-      periodo TEXT NOT NULL, -- (mensual, semanal, anual)
+      periodo TEXT NOT NULL,
       fecha_creacion TEXT NOT NULL,
       FOREIGN KEY (categoria_id) REFERENCES categorias(id)
-    )
-  ''');
-
+    );
+    ''');
 
     await db.execute('''
     CREATE TABLE settings (
@@ -107,10 +120,9 @@ class DatabaseHelper {
       default_view TEXT DEFAULT 'weekly',
       backup_enabled INTEGER DEFAULT 0,
       notifications INTEGER DEFAULT 1
-    )
-  ''');
+    );
+    ''');
 
-    // 📌 **Insertar Configuración por Defecto**
     await db.insert('settings', {
       'main_currency': 'USD',
       'first_day_of_week': 'Monday',
@@ -120,65 +132,133 @@ class DatabaseHelper {
       'notifications': 1
     });
 
-    // 📌 Insertar Categorías y Subcategorías de prueba
     await insertCategoriesAndSubcategories(db);
+    await insertDefaultAccounts(db);
+    await insertTestTransactions(db);
+  }
 
-    // 📌 Insertar Cuentas por Defecto
-    List<Map<String, dynamic>> defaultAccounts = [
+  Future<void> insertDefaultAccounts(Database db) async {
+    List<Map<String, dynamic>> testAccounts = [
       {
-        'name': 'Cartera',
+        'name': 'Cuenta Banreservas',
         'type': 'normal',
-        'category': 'Dinero físico',
-        'balance': 500.00,
+        'category': 'Cuentas personales',
+        'balance': 5046.00,
         'currency': 'DOP',
-        'balance_mode': 'default'
+        'balance_mode': 'default',
+        'visible': 1,
+        'include_in_balance': 1
       },
       {
-        'name': 'Banreservas Ahorro',
-        'type': 'saving',
-        'category': 'Cuentas de ahorros',
-        'balance': 10000.00,
+        'name': 'Cuenta Popular (carrito)',
+        'type': 'normal',
+        'category': 'Cuentas personales',
+        'balance': 2260.00,
         'currency': 'DOP',
-        'interest_rate': 4.00,
-        'interest_period': 'mensual',
-        'penalty_rate': 0.15,
-        'balance_mode': 'debit'
+        'balance_mode': 'default',
+        'visible': 1,
+        'include_in_balance': 1
       },
       {
-        'name': 'Corriente',
-        'type': 'current',
-        'category': 'Cuentas corrientes',
-        'balance': 0.00,
+        'name': 'Cuenta del BHD (SamTech)',
+        'type': 'normal',
+        'category': 'Cuentas del negocio',
+        'balance': 3067.00,
         'currency': 'DOP',
-        'penalty_fixed': 1000.00,
-        'balance_mode': 'debit'
+        'balance_mode': 'default',
+        'visible': 0, // Oculta
+        'include_in_balance': 0
       },
       {
-        'name': 'Tarjeta de Crédito',
+        'name': 'Tarjeta gold Banreservas',
         'type': 'credit',
-        'category': 'Tarjetas de Crédito',
-        'balance': 50000.00,
+        'category': 'Tarjetas de credito',
+        'balance': 21324.55,
         'currency': 'DOP',
+        'balance_mode': 'credit',
+        'max_credit': 21324.55,
         'due_date': '23',
         'cutoff_date': '1',
-        'balance_mode': 'credit'
+        'penalty_fixed': 250.00,
+        'penalty_rate': 5.00,
+        'visible': 1,
+        'include_in_balance': 1
       },
       {
-        'name': 'Deuda',
+        'name': 'Cuenta BHD (conjunta)',
+        'type': 'credit',
+        'category': 'Tarjetas de credito',
+        'balance': 365.00,
+        'currency': 'DOP',
+        'balance_mode': 'credit',
+        'max_credit': 365.00,
+        'due_date': '15',
+        'cutoff_date': '28',
+        'penalty_rate': 3.00,
+        'visible': 1,
+        'include_in_balance': 1
+      },
+      {
+        'name': 'Tarjeta de crédito personal',
+        'type': 'credit',
+        'category': 'Tarjetas de credito',
+        'balance': 409.00,
+        'currency': 'DOP',
+        'balance_mode': 'credit',
+        'max_credit': 50000.00,
+        'due_date': '10',
+        'cutoff_date': '25',
+        'penalty_fixed': 200.00,
+        'penalty_rate': 4.00,
+        'visible': 1,
+        'include_in_balance': 1
+      },
+      {
+        'name': 'Deuda a Eleanny',
         'type': 'debt',
         'category': 'Deudas',
-        'balance': 150000.00,
-        'currency': 'DOP',
-        'due_date': '15',
-        'balance_mode': 'credit'
+        'balance': -4658.76,
+        'currency': 'USD',
+        'balance_mode': 'credit',
+        'due_date': '30',
+        'penalty_rate': 1.5,
+        'visible': 1,
+        'include_in_balance': 1
       },
+      {
+        'name': 'Ahorro en monedas',
+        'type': 'saving',
+        'category': 'Ahorros',
+        'balance': 475.00,
+        'currency': 'DOP',
+        'interest_rate': 2.00,
+        'interest_period': 'mensual',
+        'penalty_rate': 0.5,
+        'balance_mode': 'debit',
+        'visible': 1,
+        'include_in_balance': 1
+      },
+      {
+        'name': 'Fondo de emergencia',
+        'type': 'saving',
+        'category': 'Ahorros',
+        'balance': 4869.00,
+        'currency': 'DOP',
+        'interest_rate': 2.00,
+        'interest_period': 'anual',
+        'penalty_rate': 0.5,
+        'balance_mode': 'debit',
+        'visible': 1,
+        'include_in_balance': 1
+      }
     ];
 
-
-    for (var account in defaultAccounts) {
+// Inserción (dentro del _onCreate o una función inicial):
+    for (var account in testAccounts) {
       await db.insert('accounts', account);
     }
-// 📌 Insertar Transacciones de Prueba
+
+    // 📌 Insertar Transacciones de Prueba
     await insertTestTransactions(db);
   }
 
@@ -369,31 +449,47 @@ class DatabaseHelper {
     final db = await database;
     print("📝 Intentando registrar transacción: $transaction");
 
-    // Asegurar que `linked_account_id` esté presente en transferencias
     if (transaction['type'] == 'transfer' && !transaction.containsKey('linked_account_id')) {
-      print("⚠️ ERROR: No se especificó una cuenta destino para la transferencia.");
       throw Exception("Debes seleccionar una cuenta destino para la transferencia.");
     }
 
-    int id = await db.insert(
-      'transactions',
-      {
-        'account_id': transaction['account_id'],
-        'linked_account_id': transaction['type'] == 'transfer' ? transaction['linked_account_id'] : null, // ✅ Solución
-        'type': transaction['type'],
-        'amount': transaction['amount'],
-        'category_id': transaction['category_id'],
-        'date': transaction['date'],
-        'note': transaction['note'],
-      },
-    );
+    int id = await db.insert('transactions', {
+      'account_id': transaction['account_id'],
+      'linked_account_id': transaction['type'] == 'transfer' ? transaction['linked_account_id'] : null,
+      'type': transaction['type'],
+      'amount': transaction['amount'],
+      'category_id': transaction['category_id'],
+      'date': transaction['date'],
+      'note': transaction['note'],
+    });
 
-    // 🔍 Debug: Verificar si la transacción fue insertada
-    final transactions = await db.query('transactions');
-    print('📌 Transacciones Registradas en DB: $transactions');
+    // ⚡ Actualizar el balance de la(s) cuenta(s)
+    if (transaction['type'] == 'income') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [transaction['amount'], transaction['account_id']],
+      );
+    } else if (transaction['type'] == 'expense') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [transaction['amount'], transaction['account_id']],
+      );
+    } else if (transaction['type'] == 'transfer') {
+      // Gastar en cuenta origen
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [transaction['amount'], transaction['account_id']],
+      );
+      // Recibir en cuenta destino
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [transaction['amount'], transaction['linked_account_id']],
+      );
+    }
 
     return id;
   }
+
 
 
 
@@ -412,25 +508,127 @@ class DatabaseHelper {
   }
 
 
-  Future<int> updateTransaction(int id, Map<String, dynamic> transaction) async {
+  Future<int> updateTransaction(int id, Map<String, dynamic> updatedTransaction) async {
     final db = await database;
-    return await db.update(
+
+    // Obtener la transacción original
+    final List<Map<String, dynamic>> oldTransactionList = await db.query(
       'transactions',
-      transaction,
       where: 'id = ?',
       whereArgs: [id],
     );
+
+    if (oldTransactionList.isEmpty) {
+      throw Exception("No se encontró la transacción para actualizar.");
+    }
+
+    final oldTransaction = oldTransactionList.first;
+
+    // Revertir efectos del monto anterior
+    if (oldTransaction['type'] == 'income') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+    } else if (oldTransaction['type'] == 'expense') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+    } else if (oldTransaction['type'] == 'transfer') {
+      // Revertir movimiento anterior
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['linked_account_id']],
+      );
+    }
+
+    // Actualizar la transacción con los nuevos valores
+    int result = await db.update(
+      'transactions',
+      updatedTransaction,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    // Aplicar los nuevos efectos
+    if (updatedTransaction['type'] == 'income') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [updatedTransaction['amount'], updatedTransaction['account_id']],
+      );
+    } else if (updatedTransaction['type'] == 'expense') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [updatedTransaction['amount'], updatedTransaction['account_id']],
+      );
+    } else if (updatedTransaction['type'] == 'transfer') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [updatedTransaction['amount'], updatedTransaction['account_id']],
+      );
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [updatedTransaction['amount'], updatedTransaction['linked_account_id']],
+      );
+    }
+
+    return result;
   }
+
 
 
   Future<int> deleteTransaction(int id) async {
     final db = await database;
+
+    // Obtener la transacción original antes de eliminarla
+    final List<Map<String, dynamic>> oldTransactionList = await db.query(
+      'transactions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (oldTransactionList.isEmpty) {
+      throw Exception("No se encontró la transacción para eliminar.");
+    }
+
+    final oldTransaction = oldTransactionList.first;
+
+    // Revertir efectos del monto antes de eliminar
+    if (oldTransaction['type'] == 'income') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+    } else if (oldTransaction['type'] == 'expense') {
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+    } else if (oldTransaction['type'] == 'transfer') {
+      // Revertir movimiento de transferencia
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['account_id']],
+      );
+      await db.rawUpdate(
+        'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+        [oldTransaction['amount'], oldTransaction['linked_account_id']],
+      );
+    }
+
+    // Eliminar la transacción
     return await db.delete(
       'transactions',
       where: 'id = ?',
       whereArgs: [id],
     );
   }
+
 
   Future<int> addCategory(Map<String, dynamic> category) async {
     final db = await database;
