@@ -147,8 +147,8 @@ class DatabaseHelper {
         'balance': 46.0,
         'currency': 'DOP',
         'balance_mode': 'default',
-        'include_in_balance': 1,
-        'visible': 1,
+        'include_in_balance': 0,
+        'visible': 0,
       },
       {
         'name': 'Cuenta Popular (carrito)',

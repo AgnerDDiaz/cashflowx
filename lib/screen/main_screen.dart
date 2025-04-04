@@ -29,7 +29,8 @@ class _MainScreenState extends State<MainScreen> {
   late List<Map<String, dynamic>> _transactions;
 
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
-  final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey(); // 👈 NUEVO
+  final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey();
+
 
   @override
   void initState() {

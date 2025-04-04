@@ -8,12 +8,12 @@ class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
 
   @override
-  State<AccountsScreen> createState() => _AccountsScreenState();
+  State<AccountsScreen> createState() => AccountsScreenState();
 }
 
-class _AccountsScreenState extends State<AccountsScreen> {
+class AccountsScreenState extends State<AccountsScreen> {
   List<Map<String, dynamic>> accounts = [];
-  String mainCurrency = 'DOP'; // 🔥 En el futuro lo leeremos desde Settings
+  String mainCurrency = 'DOP'; // 🔥 Esto se leerá después desde settings.
 
   @override
   void initState() {
@@ -27,29 +27,36 @@ class _AccountsScreenState extends State<AccountsScreen> {
     setState(() => accounts = result);
   }
 
-  Future<double> _getTotalCapital() async {
+  void reloadAccounts() async {
+    await _loadAccounts();
+  }
+
+  Future<double> _convertToMainCurrency(double amount, String currency) async {
+    if (currency == mainCurrency) {
+      return amount;
+    }
     final db = DatabaseHelper();
+    final rate = await db.getExchangeRate(currency, mainCurrency);
+    return amount * rate;
+  }
+
+  Future<double> _getTotalCapital() async {
     double total = 0.0;
     for (final account in accounts) {
       if (account['include_in_balance'] == 1 && account['balance_mode'] != 'credit') {
-        final balance = account['balance'] as double;
-        final accountCurrency = account['currency'] as String;
-        final rate = await db.getExchangeRate(accountCurrency, mainCurrency);
-        total += balance * rate;
+        final convertedBalance = await _convertToMainCurrency(account['balance'], account['currency']);
+        total += convertedBalance;
       }
     }
     return total;
   }
 
   Future<double> _getTotalDebt() async {
-    final db = DatabaseHelper();
     double total = 0.0;
     for (final account in accounts) {
       if (account['include_in_balance'] == 1 && account['balance_mode'] == 'credit') {
-        final balance = account['balance'] as double;
-        final accountCurrency = account['currency'] as String;
-        final rate = await db.getExchangeRate(accountCurrency, mainCurrency);
-        total += balance * rate;
+        final convertedBalance = await _convertToMainCurrency(account['balance'], account['currency']);
+        total += convertedBalance;
       }
     }
     return total;
@@ -61,9 +68,17 @@ class _AccountsScreenState extends State<AccountsScreen> {
     return capital - debt;
   }
 
+  Future<double> _convertAmount(double amount, String currency) async {
+    if (currency == mainCurrency) {
+      return amount;
+    }
+    final db = DatabaseHelper();
+    final rate = await db.getExchangeRate(currency, mainCurrency);
+    return amount * rate;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Agrupar cuentas por categoría
     final Map<String, List<Map<String, dynamic>>> categoryMap = {};
     for (final account in accounts) {
       final category = account['category'] ?? 'Sin categoría';
@@ -115,52 +130,47 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   children: categoryMap.entries.map((entry) {
                     final category = entry.key;
                     final categoryAccounts = entry.value;
-
                     final visibleAccounts = categoryAccounts.where((acc) => acc['visible'] == 1).toList();
-                    final totalBalance = visibleAccounts.fold<double>(
-                      0.0,
-                          (sum, acc) {
-                        final balance = acc['balance'] as double;
-                        return acc['balance_mode'] == 'credit' ? sum - balance : sum + balance;
+
+                    return FutureBuilder<double>(
+                      future: _calculateCategoryTotal(categoryAccounts),
+                      builder: (context, snapshot) {
+                        final totalBalance = snapshot.data ?? 0.0;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AccountCategoryHeader(
+                              category: category,
+                              totalBalance: totalBalance,
+                              isHidden: visibleAccounts.isEmpty,
+                            ),
+                            ...categoryAccounts.map((account) {
+                              final type = account['type'];
+
+                              if (type == 'credit') {
+                                return CreditCardTile(
+                                  name: account['name'],
+                                  dueAmount: account['balance'],
+                                  remainingCredit: (account['max_credit'] ?? 0) - (account['balance'] ?? 0),
+                                  currency: account['currency'],
+                                  visible: account['visible'] == 1,
+                                  onTap: () {},
+                                );
+                              } else {
+                                return AccountTile(
+                                  name: account['name'],
+                                  balance: account['balance'],
+                                  currency: account['currency'],
+                                  visible: account['visible'] == 1,
+                                  onTap: () {},
+                                );
+                              }
+                            }).toList(),
+                            const SizedBox(height: 12),
+                          ],
+                        );
                       },
-                    );
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AccountCategoryHeader(
-                          category: category,
-                          totalBalance: totalBalance,
-                          isHidden: visibleAccounts.isEmpty,
-                        ),
-                        ...categoryAccounts.map((account) {
-                          final type = account['type'];
-
-                          if (type == 'credit') {
-                            return CreditCardTile(
-                              name: account['name'],
-                              dueAmount: account['balance'],
-                              remainingCredit: (account['max_credit'] ?? 0) - (account['balance'] ?? 0),
-                              currency: account['currency'],
-                              visible: account['visible'] == 1,
-                              onTap: () {
-                                // 🔥 Navegar al detalle de tarjeta de crédito
-                              },
-                            );
-                          } else {
-                            return AccountTile(
-                              name: account['name'],
-                              balance: account['balance'],
-                              currency: account['currency'],
-                              visible: account['visible'] == 1,
-                              onTap: () {
-                                // 🔥 Navegar al detalle de cuenta normal
-                              },
-                            );
-                          }
-                        }).toList(),
-                        const SizedBox(height: 12),
-                      ],
                     );
                   }).toList(),
                 ),
@@ -170,5 +180,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
         },
       ),
     );
+  }
+
+  Future<double> _calculateCategoryTotal(List<Map<String, dynamic>> accounts) async {
+    double total = 0.0;
+    for (final account in accounts) {
+      if (account['visible'] == 1) {
+        final converted = await _convertAmount(account['balance'], account['currency']);
+        total += account['balance_mode'] == 'credit' ? -converted : converted;
+      }
+    }
+    return total;
   }
 }
