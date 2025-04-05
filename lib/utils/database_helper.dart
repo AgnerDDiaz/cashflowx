@@ -23,21 +23,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6, // NUEVA VERSIÓN para aplicar cambios
       onCreate: _onCreate,
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 5) {
-          await db.execute('''
-            CREATE TABLE exchange_rates (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              base_currency TEXT NOT NULL,
-              target_currency TEXT NOT NULL,
-              rate REAL NOT NULL,
-              last_updated TEXT NOT NULL
-            );
-          ''');
-        }
-      },
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -107,35 +95,82 @@ class DatabaseHelper {
       monto_maximo REAL NOT NULL,
       periodo TEXT NOT NULL,
       fecha_creacion TEXT NOT NULL,
-      FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+     FOREIGN KEY (categoria_id) REFERENCES categories(id)
     );
+    ''');
+    await db.execute('''
+      CREATE TABLE settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        main_currency TEXT NOT NULL,
+        secondary_currency TEXT DEFAULT 'USD',
+        first_day_of_week TEXT DEFAULT 'Monday',
+        first_day_of_month TEXT DEFAULT '1st',
+        default_view TEXT DEFAULT 'weekly',
+        backup_enabled INTEGER DEFAULT 0,
+        notifications INTEGER DEFAULT 1,
+        theme_mode TEXT DEFAULT 'system',
+        language TEXT DEFAULT 'es',
+        biometric_enabled INTEGER DEFAULT 0,
+        pin_code TEXT DEFAULT NULL,
+        auto_update_rates INTEGER DEFAULT 1,
+        rate_update_interval_days INTEGER DEFAULT 30
+      )
     ''');
 
     await db.execute('''
-    CREATE TABLE settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      main_currency TEXT NOT NULL,
-      first_day_of_week TEXT DEFAULT 'Monday',
-      first_day_of_month TEXT DEFAULT '1st',
-      default_view TEXT DEFAULT 'weekly',
-      backup_enabled INTEGER DEFAULT 0,
-      notifications INTEGER DEFAULT 1
-    );
+      CREATE TABLE custom_exchange_rates_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        base_currency TEXT NOT NULL,
+        target_currency TEXT NOT NULL,
+        rate REAL NOT NULL,
+        updated_at TEXT NOT NULL
+      )
     ''');
 
+    // Insertar settings por defecto
     await db.insert('settings', {
       'main_currency': 'USD',
+      'secondary_currency': 'DOP',
       'first_day_of_week': 'Monday',
       'first_day_of_month': '1st',
       'default_view': 'weekly',
       'backup_enabled': 0,
-      'notifications': 1
+      'notifications': 1,
+      'theme_mode': 'system',
+      'language': 'es',
+      'biometric_enabled': 0,
+      'auto_update_rates': 1,
+      'rate_update_interval_days': 30
     });
 
     await insertCategoriesAndSubcategories(db);
     await insertDefaultAccounts(db);
     await insertTestTransactions(db);
+
   }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 6) {
+      await db.execute("ALTER TABLE settings ADD COLUMN secondary_currency TEXT DEFAULT 'USD';");
+      await db.execute("ALTER TABLE settings ADD COLUMN theme_mode TEXT DEFAULT 'system';");
+      await db.execute("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'es';");
+      await db.execute("ALTER TABLE settings ADD COLUMN biometric_enabled INTEGER DEFAULT 0;");
+      await db.execute("ALTER TABLE settings ADD COLUMN pin_code TEXT DEFAULT NULL;");
+      await db.execute("ALTER TABLE settings ADD COLUMN auto_update_rates INTEGER DEFAULT 1;");
+      await db.execute("ALTER TABLE settings ADD COLUMN rate_update_interval_days INTEGER DEFAULT 30;");
+
+      await db.execute('''
+        CREATE TABLE custom_exchange_rates_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          base_currency TEXT NOT NULL,
+          target_currency TEXT NOT NULL,
+          rate REAL NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+    }
+  }
+
 
   Future<void> insertDefaultAccounts(Database db) async {
     // 📦 Insertar Cuentas de Prueba Mejoradas
@@ -761,6 +796,44 @@ class DatabaseHelper {
     );
 
     return result.isNotEmpty ? result.first : null;
+  }
+
+  // Settings
+  Future<Map<String, dynamic>?> getSettings() async {
+    final db = await database;
+    final result = await db.query('settings', limit: 1);
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<int> updateSettings(Map<String, dynamic> newSettings) async {
+    final db = await database;
+    return await db.update('settings', newSettings, where: 'id = ?', whereArgs: [1]);
+  }
+
+  // Exchange Rates
+  Future<List<Map<String, dynamic>>> getExchangeRates() async {
+    final db = await database;
+    return await db.query('exchange_rates');
+  }
+
+  Future<List<Map<String, dynamic>>> getCustomExchangeRatesLog() async {
+    final db = await database;
+    return await db.query('custom_exchange_rates_log', orderBy: 'updated_at DESC');
+  }
+
+  Future<int> insertCustomExchangeRate(Map<String, dynamic> rateData) async {
+    final db = await database;
+    return await db.insert('custom_exchange_rates_log', rateData);
+  }
+
+  Future<int> updateExchangeRate(String baseCurrency, String targetCurrency, double newRate) async {
+    final db = await database;
+    return await db.update(
+      'exchange_rates',
+      {'rate': newRate, 'last_updated': DateTime.now().toIso8601String()},
+      where: 'base_currency = ? AND target_currency = ?',
+      whereArgs: [baseCurrency, targetCurrency],
+    );
   }
 
   // Método para cerrar la base de datos

@@ -53,18 +53,14 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-            'CashFlowX 💸',
-            style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-              letterSpacing: 4
-            ),
+        title: Text(
+          'CashFlowX 💸',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         centerTitle: true,
         elevation: 0,
       ),
+
       body: Column(
         children: [
           DateSelector(
@@ -204,16 +200,14 @@ class DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Text(
                       entry.key,
-                      style: const TextStyle(
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: Colors.black54,
+                        color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
                       ),
                     ),
                     Text(
                       _getBalanceText(entry.value),
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: _getBalanceColor(entry.value),
                       ),
