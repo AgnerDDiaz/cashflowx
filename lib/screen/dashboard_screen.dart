@@ -18,7 +18,8 @@ class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> transactions;
   final List<Map<String, dynamic>> categories;
   static DateTime lastSelectedDate = DateTime.now();
-  static String lastSelectedFilter = "Mensual"; // en lugar de "Semanal"
+  static String lastSelectedFilter = "monthly";
+
 
 
 
@@ -87,17 +88,18 @@ class DashboardScreenState extends State<DashboardScreen> {
           ),
           _buildBalance(),
           Expanded(
-            child: selectedFilter == "Calendario"
+            child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
                 ? CalendarMonthView(selectedDate: selectedDate)
-                : selectedFilter == "Anual"
+                : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
                 ? AnnualSummaryView(
-                    selectedDate: selectedDate,
-                    accounts: accounts,
-                    categories: categories,
-                    transactions: transactions,
-                  )
+              selectedDate: selectedDate,
+              accounts: accounts,
+              categories: categories,
+              transactions: transactions,
+            )
                 : _buildTransactionList(),
           ),
+
 
 
         ],
@@ -121,23 +123,23 @@ class DashboardScreenState extends State<DashboardScreen> {
     DateTime endDate;
 
     switch (selectedFilter) {
-      case 'Semanal':
+      case "weekly":
         startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1)); // Lunes
         endDate = startDate.add(const Duration(days: 7));
         break;
 
 
-      case 'Mensual':
+      case "monthly":
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);
         endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
 
-      case 'Calendario':
+      case "calendar":
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);
         endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
 
-      case 'Anual':
+      case "annual":
         startDate = DateTime(selectedDate.year, 1, 1);
         endDate = DateTime(selectedDate.year + 1, 1, 1);
         break;
