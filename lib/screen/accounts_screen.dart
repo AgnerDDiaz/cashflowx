@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
@@ -81,7 +82,7 @@ class AccountsScreenState extends State<AccountsScreen> {
   Widget build(BuildContext context) {
     final Map<String, List<Map<String, dynamic>>> categoryMap = {};
     for (final account in accounts) {
-      final category = account['category'] ?? 'Sin categoría';
+      final category = account['category'] ?? "no_category".tr();
       if (!categoryMap.containsKey(category)) {
         categoryMap[category] = [];
       }
@@ -91,7 +92,7 @@ class AccountsScreenState extends State<AccountsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Cuentas',
+          'accounts'.tr(),
           style: Theme.of(context).textTheme.titleLarge,
         ),
         actions: [
@@ -129,7 +130,7 @@ class AccountsScreenState extends State<AccountsScreen> {
                 totalIncome: totalIncome,
                 totalExpenses: totalExpenses,
                 totalBalance: totalBalance,
-                title: "Resumen de cuentas",
+                title: "accounts_summary".tr(),
               ),
               const SizedBox(height: 8),
               Expanded(

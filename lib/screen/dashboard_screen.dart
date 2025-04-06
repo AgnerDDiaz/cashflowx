@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
@@ -58,7 +59,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'CashFlowX 💸',
+          'app_title'.tr(),
           style: Theme.of(context).textTheme.titleLarge,
         ),
         centerTitle: true,
@@ -164,7 +165,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       totalIncome: totalIncome,
       totalExpenses: totalExpenses,
       totalBalance: totalBalance,
-      title: "Balance de $selectedFilter",
+      title: "balance_of".tr(args: [selectedFilter]),
     );
   }
 
@@ -229,7 +230,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                     : '';
 
                 if (transaction['type'] == 'transfer') {
-                  categoryName = "Transferencia";
+                  categoryName = "transfer".tr();
                   accountName = "$accountName → $linkedAccountName";
                 }
 
@@ -251,14 +252,14 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   String _getCategoryName(int? categoryId) {
-    if (categoryId == null) return "Desconocida";
+    if (categoryId == null) return "unknown".tr();
     var category = widget.categories.firstWhere(
-            (cat) => cat['id'] == categoryId, orElse: () => {'name': 'Desconocida'});
+            (cat) => cat['id'] == categoryId, orElse: () => {'name': "unknown".tr()});
     return category['name'];
   }
 
   String _getAccountName(int? accountId) {
-    if (accountId == null) return "Transferencia";
+    if (accountId == null) return "transfer".tr();
     var account = widget.accounts.firstWhere(
             (acc) => acc['id'] == accountId, orElse: () => {'name': 'Desconocida'});
     return account['name'];

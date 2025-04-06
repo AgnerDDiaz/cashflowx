@@ -22,5 +22,41 @@
   "payment_due": "Payment Due",
   "remaining_credit": "Remaining Credit",
   "edit_transaction": "Edit Transaction",
-  "no_transactions": "No transactions found"
+  "no_transactions": "No transactions found",
+  "account_summary": "Account Summary",
+  "no_note": "No note",
+  "accounts_summary": "Accounts Summary",
+  "no_category": "No category",
+  "add_account": "Add Account",
+  "add_category": "Add Category",
+  "edit_account": "Edit Account",
+  "edit_category": "Edit Category",
+  "complete_fields": "Completa todos los campos correctamente",
+  "insufficient_balance": "Saldo insuficiente para realizar esta transacción",
+  "app_title": "CashFlowX 💸",
+  "balance_of": "Balance of {}",
+  "transfer": "Transfer",
+  "unknown": "Unknown",
+  "delete_transaction": "Delete Transaction",
+  "delete_transaction_confirmation": "Are you sure you want to delete this transaction? This action cannot be undone.",
+  "select_account": "Select Account",
+  "select_category": "Select Category",
+  "unknown_account": "Unknown Account",
+  "next_payment": "Next Payment",
+  "annual": "Annual",
+  "monday": "Mon",
+  "tuesday": "Tue",
+  "wednesday": "Wed",
+  "thursday": "Thu",
+  "friday": "Fri",
+  "category": "Category",
+  "unknown_category": "Unknown_category"
+
 }
+
+
+
+
+
+
+

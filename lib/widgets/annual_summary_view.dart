@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
@@ -175,7 +176,7 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
                               transactions: widget.transactions,
                             ),
                             settings: RouteSettings(arguments: {
-                              'filter': 'Semanal',
+                              'filter': 'weekly', // 👈 valor interno, no traducido
                               'date': week['start'],
                             }),
                           ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_colors.dart'; // 📌 Asegúrate de importar AppColors
+import 'package:easy_localization/easy_localization.dart';
+
 
 class DateSelector extends StatefulWidget {
   final DateTime initialDate;
@@ -30,13 +32,13 @@ class _DateSelectorState extends State<DateSelector> {
   }
 
   String _formatDate(DateTime date, String filter) {
-    if (filter == 'Semanal') {
+    if (filter == 'weekly') {
       DateTime start = date.subtract(Duration(days: date.weekday - 1));
       DateTime end = start.add(const Duration(days: 6));
       return "${DateFormat('d/MM').format(start)} ~ ${DateFormat('d/MM').format(end)}";
-    } else if (filter == 'Mensual' || filter == 'Calendario') {
+    } else if (filter == 'monthly' || filter == 'calendar') {
       return DateFormat('MMMM yyyy').format(date);
-    } else if (filter == 'Anual') {
+    } else if (filter == 'annual') {
       return DateFormat('yyyy').format(date);
     } else {
       return DateFormat('d MMM yyyy').format(date);
@@ -74,15 +76,15 @@ class _DateSelectorState extends State<DateSelector> {
 
   void _changeDate(bool next) {
     setState(() {
-      if (selectedFilter == 'Semanal') {
+      if (selectedFilter == 'weekly') {
         selectedDate = selectedDate.add(Duration(days: next ? 7 : -7));
-      } else if (selectedFilter == 'Mensual' || selectedFilter == 'Calendario') {
+      } else if (selectedFilter == 'monthly' || selectedFilter == 'calendar') {
         selectedDate = DateTime(
           selectedDate.year,
           selectedDate.month + (next ? 1 : -1),
           1,
         );
-      } else if (selectedFilter == 'Anual') {
+      } else if (selectedFilter == 'annual') {
         selectedDate = DateTime(
           selectedDate.year + (next ? 1 : -1),
           1,
@@ -93,6 +95,7 @@ class _DateSelectorState extends State<DateSelector> {
 
     widget.onDateChanged(selectedDate, selectedFilter);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -125,20 +128,21 @@ class _DateSelectorState extends State<DateSelector> {
         /// 📌 Selector de filtro (Semanal, Mensual, Calendario, Anual)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: ['Semanal', 'Mensual', 'Calendario', 'Anual'].map((filter) {
+          children: ['weekly', 'monthly', 'calendar', 'annual'].map((filter) {
             final bool isSelected = selectedFilter == filter;
             return GestureDetector(
               onTap: () => _changeFilter(filter),
               child: Column(
                 children: [
                   Text(
-                    filter,
+                    filter.tr(),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   ),
+
                   if (isSelected)
                     Container(
                       height: 3,

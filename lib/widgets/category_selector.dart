@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart'; // 📌 Importamos AppColors
 
@@ -46,9 +47,9 @@ class _CategorySelectorState extends State<CategorySelector> {
               selectedCategory != null
                   ? widget.categories.firstWhere(
                     (cat) => cat['id'] == selectedCategory,
-                orElse: () => {'name': 'Categoría desconocida'},
+                orElse: () => {'name': 'unknown_category'.tr()},
               )['name']
-                  : "Seleccionar Categoría",
+                  : "select_category".tr(),
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             Icon(Icons.arrow_drop_down, size: 24, color: Theme.of(context).iconTheme.color),
@@ -82,7 +83,7 @@ class _CategorySelectorState extends State<CategorySelector> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "Categoría",
+                        "category".tr(),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       IconButton(
@@ -158,7 +159,7 @@ class _CategorySelectorState extends State<CategorySelector> {
                   ElevatedButton.icon(
                     onPressed: _addNewCategory,
                     icon: const Icon(Icons.add),
-                    label: const Text("Añadir Categoría"),
+                    label: Text("add_category".tr()),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.white,

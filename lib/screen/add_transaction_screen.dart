@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -46,7 +47,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text("Agregar Transacción", style: Theme.of(context).textTheme.titleLarge)),
+      appBar: AppBar(title: Text("add_transaction".tr(), style: Theme.of(context).textTheme.titleLarge)),
+
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -100,7 +102,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               controller: amountController,
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
               decoration: InputDecoration(
-                labelText: "Monto",
+                labelText: "amount".tr(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -112,7 +114,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             TextField(
               controller: noteController,
               decoration: InputDecoration(
-                labelText: "Nota (opcional)",
+                labelText: "note_optional".tr(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -128,7 +130,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
               child: Center(
                 child: Text(
-                  "Guardar Transacción",
+                  "save_transaction".tr(),
                   style: const TextStyle(fontSize: 16, color: Colors.white),
                 ),
               ),
@@ -221,8 +223,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _saveTransaction() async {
     if (selectedAccount == null || amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Completa todos los campos correctamente")),
+        SnackBar(content: Text("complete_fields".tr())),
       );
+
       return;
     }
 
@@ -236,8 +239,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         balanceMode == 'debit' &&
         amount > currentBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Saldo insuficiente para realizar esta transacción")),
+        SnackBar(content: Text("insufficient_balance".tr())),
       );
+
       return;
     }
 

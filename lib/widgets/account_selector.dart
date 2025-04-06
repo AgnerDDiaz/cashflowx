@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 
@@ -42,9 +43,9 @@ class _AccountSelectorState extends State<AccountSelector> {
               selectedAccount != null
                   ? widget.accounts.firstWhere(
                     (acc) => acc['id'] == selectedAccount,
-                orElse: () => {'name': 'Cuenta desconocida'},
+                orElse: () => {'name': 'unknown_account'.tr()},
               )['name']
-                  : "Seleccionar Cuenta",
+                  : "select_account".tr(),
               style: const TextStyle(fontSize: 16),
             ),
             Icon(Icons.arrow_drop_down, size: 24, color: Theme.of(context).iconTheme.color),
@@ -65,7 +66,7 @@ class _AccountSelectorState extends State<AccountSelector> {
           height: MediaQuery.of(context).size.height * 0.5,
           child: Column(
             children: [
-              const Text("Cuentas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("accounts".tr(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const Divider(),
               Expanded(
                 child: ListView(

@@ -1,5 +1,6 @@
 // Este archivo contendrá los widgets reutilizables de la pantalla de cuentas.
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_colors.dart';
@@ -166,14 +167,14 @@ class CreditCardTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "Pago próximo",
+              "next_payment".tr(),
               style: TextStyle(
                 color: visible ? AppColors.gastoColor.withOpacity(0.7) : Theme.of(context).disabledColor,
                 fontSize: 13,
               ),
             ),
             Text(
-              "Crédito restante",
+              "remaining_credit".tr(),
               style: TextStyle(
                 color: visible ? AppColors.gastoColor.withOpacity(0.7) : Theme.of(context).disabledColor,
                 fontSize: 13,

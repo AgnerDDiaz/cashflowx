@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -56,7 +57,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Editar Transacción", style: Theme.of(context).textTheme.titleLarge)),
+      appBar: AppBar(title: Text("edit_transaction".tr(), style: Theme.of(context).textTheme.titleLarge)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -97,7 +98,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
               controller: amountController,
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
               decoration: InputDecoration(
-                labelText: "Monto",
+                labelText: "amount".tr(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -109,7 +110,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             TextField(
               controller: noteController,
               decoration: InputDecoration(
-                labelText: "Nota (opcional)",
+                labelText: "note_optional".tr(),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -126,7 +127,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ingresoColor,
                     ),
-                    child: const Text("Actualizar", style: TextStyle(color: Colors.white)),
+                    child: Text("update".tr(), style: const TextStyle(color: Colors.white)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -136,7 +137,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.errorColor,
                     ),
-                    child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
+                    child: Text("delete".tr(), style: const TextStyle(color: Colors.white)),
                   ),
                 ),
               ],
@@ -152,19 +153,19 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Eliminar Transacción"),
-          content: const Text("¿Estás seguro de que deseas eliminar esta transacción? Esta acción no se puede deshacer."),
+          title: Text("delete_transaction".tr()),
+          content: Text("delete_transaction_confirmation".tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
+              child: Text("cancel".tr()),
             ),
             TextButton(
               onPressed: () async {
                 await _deleteTransaction();
                 Navigator.pop(context, true);
               },
-              child: Text("Eliminar", style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              child: Text("delete".tr(), style: const TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -262,7 +263,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
         balanceMode == 'debit' &&
         amount > currentBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Saldo insuficiente para realizar esta transacción")),
+        SnackBar(content: Text("insufficient_balance".tr())),
       );
       return;
     }

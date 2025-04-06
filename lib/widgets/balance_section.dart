@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_colors.dart'; // 👈 Importante
@@ -32,11 +33,11 @@ class BalanceSection extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildBalanceItem(context, "Ingreso", formatter.format(totalIncome), AppColors.ingresoColor),
-                  _buildBalanceItem(context, "Gastos", formatter.format(totalExpenses), AppColors.gastoColor),
+                  _buildBalanceItem(context, "income".tr(), formatter.format(totalIncome), AppColors.ingresoColor),
+                  _buildBalanceItem(context, "expenses".tr(), formatter.format(totalExpenses), AppColors.gastoColor),
                   _buildBalanceItem(
                     context,
-                    "Balance",
+                    "balance".tr(),
                     formatter.format(totalBalance),
                     totalBalance < 0 ? AppColors.gastoColor : AppColors.ingresoColor,
                   ),

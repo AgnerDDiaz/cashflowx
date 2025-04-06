@@ -22,5 +22,41 @@
   "payment_due": "Pago próximo",
   "remaining_credit": "Crédito restante",
   "edit_transaction": "Editar Transacción",
-  "no_transactions": "No se encontraron transacciones"
+  "no_transactions": "No se encontraron transacciones",
+  "account_summary": "Resumen de Cuenta",
+  "no_note": "Sin nota",
+  "accounts_summary": "Resumen de Cuentas",
+  "no_category": "Sin categoría",
+  "add_account": "Agregar Cuenta",
+  "add_category": "Agregar Categoría",
+  "edit_account": "Editar Cuenta",
+  "edit_category": "Editar Categoría",
+  "complete_fields": "Completa todos los campos correctamente",
+  "insufficient_balance": "Saldo insuficiente para realizar esta transacción",
+  "app_title": "CashFlowX 💸",
+  "balance_of": "Balance de {}",
+  "transfer": "Transferencia",
+  "unknown": "Desconocida",
+  "delete_transaction": "Eliminar Transacción",
+  "delete_transaction_confirmation": "¿Estás seguro que deseas eliminar esta transacción? Esta acción no se puede deshacer.",
+  "select_account": "Seleccionar Cuenta",
+  "select_category": "Seleccionar Categoría",
+  "unknown_account": "Cuenta Desconocida",
+  "next_payment": "Pago Proximo",
+  "monday": "Lun",
+  "tuesday": "Mar",
+  "wednesday": "Mié",
+  "thursday": "Jue",
+  "friday": "Vie",
+  "saturday": "Sáb",
+  "sunday": "Dom",
+  "category": "Categoría",
+  "unknown_category": "Categoría desconocida"
+
+
+
+
+
+
+
 }

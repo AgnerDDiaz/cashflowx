@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
@@ -60,7 +61,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
             totalIncome: income,
             totalExpenses: expense,
             totalBalance: balance,
-            title: "Resumen de cuenta",
+            title: "account_summary".tr(),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -76,7 +77,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                   color: Theme.of(context).cardColor,
                   child: ListTile(
                     title: Text(
-                      t['note'] ?? 'Sin nota',
+                      t['note'] ?? "no_note".tr(),
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     subtitle: Text(

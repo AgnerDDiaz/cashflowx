@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../screen/edit_transaction_screen.dart';
 import '../utils/app_colors.dart'; // 📌 Asegúrate de importar AppColors
@@ -29,7 +30,7 @@ class TransactionItem extends StatelessWidget {
 
     if (type == 'transfer') {
       account = "$account → $linkedAccountName";
-      category = "Transferencia";
+      category = "transfer".tr();
     }
 
     Color amountColor = type == 'income'
@@ -87,19 +88,19 @@ class TransactionItem extends StatelessWidget {
   }
 
   String _getCategoryName(int? categoryId) {
-    if (categoryId == null) return "Sin Categoría";
+    if (categoryId == null) return "no_category".tr();
     var category = categories.firstWhere(
           (cat) => cat['id'] == categoryId,
-      orElse: () => {'name': 'Sin Categoría'},
+      orElse: () => {'name': 'no_category'.tr()},
     );
     return category['name'];
   }
 
   String _getAccountName(int? accountId) {
-    if (accountId == null) return "Desconocida";
+    if (accountId == null) return "unknown".tr();
     var account = accounts.firstWhere(
           (acc) => acc['id'] == accountId,
-      orElse: () => {'name': 'Desconocida'},
+      orElse: () => {'name': 'unknown'.tr()},
     );
     return account['name'];
   }
