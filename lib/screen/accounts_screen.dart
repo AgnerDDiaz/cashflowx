@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../widgets/balance_section.dart';
-import '../widgets/account_widgets.dart'; // 👈 nuestros widgets nuevos
+import '../widgets/account_widgets.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
@@ -90,7 +90,10 @@ class AccountsScreenState extends State<AccountsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cuentas'),
+        title: Text(
+          'Cuentas',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
@@ -101,6 +104,9 @@ class AccountsScreenState extends State<AccountsScreen> {
             onPressed: () {},
           ),
         ],
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+
       ),
       body: FutureBuilder(
         future: Future.wait([
@@ -125,6 +131,7 @@ class AccountsScreenState extends State<AccountsScreen> {
                 totalBalance: totalBalance,
                 title: "Resumen de cuentas",
               ),
+              const SizedBox(height: 8),
               Expanded(
                 child: ListView(
                   children: categoryMap.entries.map((entry) {
@@ -144,6 +151,7 @@ class AccountsScreenState extends State<AccountsScreen> {
                               category: category,
                               totalBalance: totalBalance,
                               isHidden: visibleAccounts.isEmpty,
+
                             ),
                             ...categoryAccounts.map((account) {
                               final type = account['type'];

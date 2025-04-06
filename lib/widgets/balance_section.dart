@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 📌 Para formatear números con separador de miles
+import 'package:intl/intl.dart';
+import '../utils/app_colors.dart'; // 👈 Importante
 
 class BalanceSection extends StatelessWidget {
   final double totalIncome;
@@ -17,14 +18,13 @@ class BalanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat("#,##0.00", "en_US"); // 📌 Formato de moneda
+    final formatter = NumberFormat("#,##0.00", "en_US");
 
     return Column(
       children: [
-        const Divider(color: Colors.grey, thickness: 1, height: 1),
+        Divider(color: Theme.of(context).dividerColor, thickness: 1, height: 1),
 
         Container(
-
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -32,12 +32,13 @@ class BalanceSection extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildBalanceItem("Ingreso", formatter.format(totalIncome), Colors.green),
-                  _buildBalanceItem("Gastos", formatter.format(totalExpenses), Colors.red),
+                  _buildBalanceItem(context, "Ingreso", formatter.format(totalIncome), AppColors.ingresoColor),
+                  _buildBalanceItem(context, "Gastos", formatter.format(totalExpenses), AppColors.gastoColor),
                   _buildBalanceItem(
+                    context,
                     "Balance",
                     formatter.format(totalBalance),
-                    totalBalance < 0 ? Colors.red : Colors.green,
+                    totalBalance < 0 ? AppColors.gastoColor : AppColors.ingresoColor,
                   ),
                 ],
               ),
@@ -45,24 +46,31 @@ class BalanceSection extends StatelessWidget {
           ),
         ),
 
-        // 🔹 Línea divisoria inferior
-        const Divider(color: Colors.grey, thickness: 1, height: 1),
+        Divider(color: Theme.of(context).dividerColor, thickness: 1, height: 1),
       ],
     );
   }
 
-  /// 🔹 Método auxiliar para construir cada sección (Ingreso, Gastos, Balance)
-  Widget _buildBalanceItem(String label, String amount, Color color) {
+  /// Método auxiliar corregido
+  Widget _buildBalanceItem(BuildContext context, String label, String amount, Color color) {
     return Column(
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).hintColor, // 👈 Dinámico
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           amount,
-          style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../screen/main_screen.dart';
+import '../utils/app_colors.dart';
+
 
 class AnnualSummaryView extends StatefulWidget {
   final DateTime selectedDate;
@@ -133,9 +135,9 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text("${start.day}/${start.month} ~ ${end.day}/${end.month}",
-                          style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          style: TextStyle(fontSize: 10, color: Theme.of(context).hintColor)),
                       Text(monthLabel,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color,)),
                     ],
                   ),
                   Column(
@@ -144,14 +146,17 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
                       Row(
                         children: [
                           Text("+ \$${summary['income']!.toStringAsFixed(2)}",
-                              style: const TextStyle(fontSize: 10, color: Colors.green)),
+                              style: TextStyle(fontSize: 10, color: AppColors.ingresoColor)),
+
                           const SizedBox(width: 6),
                           Text("- \$${summary['expense']!.toStringAsFixed(2)}",
-                              style: const TextStyle(fontSize: 10, color: Colors.red)),
+                              style: TextStyle(fontSize: 10, color: AppColors.gastoColor)),
+
                         ],
                       ),
                       Text("\$${summary['balance']!.toStringAsFixed(2)}",
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+
                     ],
                   ),
                 ],
@@ -182,21 +187,21 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(week['range'],
-                                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                style: TextStyle(fontSize: 10, color: Theme.of(context).hintColor)),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Row(
                                   children: [
                                     Text("+ \$${week['income'].toStringAsFixed(2)}",
-                                        style: const TextStyle(fontSize: 10, color: Colors.green)),
+                                        style: TextStyle(fontSize: 10, color: AppColors.ingresoColor)),
                                     const SizedBox(width: 6),
                                     Text("- \$${week['expense'].toStringAsFixed(2)}",
-                                        style: const TextStyle(fontSize: 10, color: Colors.red)),
-                                  ],
+                                        style: TextStyle(fontSize: 10, color: AppColors.gastoColor)),
+                                      ],
                                 ),
                                 Text("\$${week['balance'].toStringAsFixed(2)}",
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
                               ],
                             ),
                           ],

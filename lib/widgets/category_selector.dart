@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart'; // 📌 Importamos AppColors
 
 class CategorySelector extends StatefulWidget {
   final List<Map<String, dynamic>> categories;
   final String transactionType;
   final Function(int) onSelect;
-  final int? initialSelectedId; // ✅ NUEVO
+  final int? initialSelectedId;
 
   const CategorySelector({
     Key? key,
     required this.categories,
     required this.transactionType,
     required this.onSelect,
-    this.initialSelectedId, // ✅ NUEVO
+    this.initialSelectedId,
   }) : super(key: key);
 
   @override
@@ -25,7 +26,7 @@ class _CategorySelectorState extends State<CategorySelector> {
   @override
   void initState() {
     super.initState();
-    selectedCategory = widget.initialSelectedId; // ✅ Inicializamos si viene valor
+    selectedCategory = widget.initialSelectedId;
   }
 
   @override
@@ -35,8 +36,8 @@ class _CategorySelectorState extends State<CategorySelector> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Theme.of(context).dividerColor),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -48,9 +49,9 @@ class _CategorySelectorState extends State<CategorySelector> {
                 orElse: () => {'name': 'Categoría desconocida'},
               )['name']
                   : "Seleccionar Categoría",
-              style: const TextStyle(fontSize: 16),
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
-            const Icon(Icons.arrow_drop_down, size: 24, color: Colors.grey),
+            Icon(Icons.arrow_drop_down, size: 24, color: Theme.of(context).iconTheme.color),
           ],
         ),
       ),
@@ -61,6 +62,7 @@ class _CategorySelectorState extends State<CategorySelector> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateModal) {
@@ -79,10 +81,14 @@ class _CategorySelectorState extends State<CategorySelector> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Categoría", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(
+                        "Categoría",
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       IconButton(
                         icon: const Icon(Icons.close),
                         onPressed: () => Navigator.pop(context),
+                        color: Theme.of(context).iconTheme.color,
                       ),
                     ],
                   ),
@@ -99,10 +105,15 @@ class _CategorySelectorState extends State<CategorySelector> {
                         return Column(
                           children: [
                             ListTile(
-                              title: Text(category['name'], style: const TextStyle(fontSize: 16)),
+                              title: Text(
+                                category['name'],
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
                               trailing: subcategories.isNotEmpty
                                   ? IconButton(
-                                icon: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
+                                icon: Icon(isExpanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more),
                                 onPressed: () {
                                   setStateModal(() {
                                     expandedCategory = isExpanded ? null : category['id'];
@@ -124,7 +135,10 @@ class _CategorySelectorState extends State<CategorySelector> {
                                 return Padding(
                                   padding: const EdgeInsets.only(left: 32.0),
                                   child: ListTile(
-                                    title: Text(sub['name'], style: const TextStyle(fontSize: 14)),
+                                    title: Text(
+                                      sub['name'],
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
                                     onTap: () {
                                       setState(() {
                                         selectedCategory = sub['id'];
@@ -140,10 +154,15 @@ class _CategorySelectorState extends State<CategorySelector> {
                       }).toList(),
                     ),
                   ),
+                  const SizedBox(height: 10),
                   ElevatedButton.icon(
                     onPressed: _addNewCategory,
                     icon: const Icon(Icons.add),
                     label: const Text("Añadir Categoría"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ],
               ),

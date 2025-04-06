@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
 
 class CalendarMonthView extends StatefulWidget {
@@ -114,6 +115,15 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
     final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
 
+    bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    Color bgColor;
+
+    if (isCurrentMonth) {
+      bgColor = isDarkMode ? AppColors.calendarCardLightDarkMode : AppColors.calendarCardLight;
+    } else {
+      bgColor = isDarkMode ? AppColors.calendarCardDarkDarkMode : AppColors.calendarCardDark;
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -135,7 +145,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
           margin: const EdgeInsets.all(2),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isCurrentMonth ? Colors.grey[200] : Colors.grey[400],
+            color: bgColor,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(
@@ -146,7 +156,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
                   '${date.day}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: isCurrentMonth ? Colors.black : Colors.black,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
                   ),
                 ),
               ),
@@ -156,9 +166,15 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text("${data['income']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.green)),
-                    Text("${data['expense']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.red)),
-                    Text("${data['balance']!.toStringAsFixed(0)}", style: const TextStyle(fontSize: 11, color: Colors.black, fontWeight: FontWeight.bold)),
+                    Text("${data['income']!.toStringAsFixed(0)}",
+                        style: const TextStyle(fontSize: 11, color: AppColors.ingresoColor)),
+                    Text("${data['expense']!.toStringAsFixed(0)}",
+                        style: const TextStyle(fontSize: 11, color: AppColors.gastoColor)),
+                    Text("${data['balance']!.toStringAsFixed(0)}",
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                            fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -168,5 +184,4 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
       ),
     );
   }
-
 }

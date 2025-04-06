@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
 import '../widgets/balance_section.dart';
 
@@ -46,7 +47,13 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     double balance = income - expense;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.account['name'])),
+      appBar: AppBar(
+        title: Text(
+          widget.account['name'],
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        centerTitle: true,
+      ),
       body: Column(
         children: [
           BalanceSection(
@@ -62,17 +69,33 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
               itemBuilder: (_, index) {
                 final t = transactions[index];
                 final isIncome = t['type'] == 'income' || (t['type'] == 'transfer' && t['linked_account_id'] == widget.account['id']);
-                return ListTile(
-                  title: Text(t['note'] ?? 'Sin nota'),
-                  subtitle: Text(t['date']),
-                  trailing: Text(
-                    (isIncome ? '+' : '-') + t['amount'].toString(),
-                    style: TextStyle(color: isIncome ? Colors.green : Colors.red),
+                final amountColor = isIncome ? AppColors.ingresoColor : AppColors.gastoColor;
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: Theme.of(context).cardColor,
+                  child: ListTile(
+                    title: Text(
+                      t['note'] ?? 'Sin nota',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    subtitle: Text(
+                      t['date'],
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    trailing: Text(
+                      (isIncome ? '+ ' : '- ') + t['amount'].toStringAsFixed(2),
+                      style: TextStyle(
+                        color: amountColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 );
               },
             ),
-          )
+          ),
         ],
       ),
     );

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../screen/edit_transaction_screen.dart';
+import '../utils/app_colors.dart'; // 📌 Asegúrate de importar AppColors
 
 class TransactionItem extends StatelessWidget {
   final Map<String, dynamic> transaction;
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
-  final VoidCallback onTransactionUpdated; // Callback para recargar las transacciones
+  final VoidCallback onTransactionUpdated;
 
   const TransactionItem({
     Key? key,
@@ -22,37 +23,48 @@ class TransactionItem extends StatelessWidget {
     String category = _getCategoryName(transaction['category_id']);
     String account = _getAccountName(transaction['account_id']);
 
-    // Si es una transferencia, mostrar ambas cuentas
     String linkedAccountName = transaction['linked_account_id'] != null
         ? _getAccountName(transaction['linked_account_id'])
         : '';
+
     if (type == 'transfer') {
       account = "$account → $linkedAccountName";
       category = "Transferencia";
     }
 
     Color amountColor = type == 'income'
-        ? Colors.green
+        ? AppColors.ingresoColor
         : type == 'expense'
-        ? Colors.red
-        : Colors.grey; // Transferencias en gris
+        ? AppColors.gastoColor
+        : AppColors.balanceColor;
 
     IconData icon = type == 'income'
         ? Icons.arrow_upward
         : type == 'expense'
         ? Icons.arrow_downward
-        : Icons.compare_arrows; // Ícono para transferencias
+        : Icons.compare_arrows;
 
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      color: Theme.of(context).cardColor,
       child: ListTile(
         leading: Icon(icon, color: amountColor),
-        title: Text(category, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(account),
+        title: Text(
+          category,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
+        ),
+        subtitle: Text(
+          account,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         trailing: Text(
           "\$${amount.toStringAsFixed(2)}",
-          style: TextStyle(color: amountColor, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(
+            color: amountColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
         onTap: () async {
           bool? updated = await Navigator.push(
@@ -67,14 +79,13 @@ class TransactionItem extends StatelessWidget {
           );
 
           if (updated == true) {
-            onTransactionUpdated(); // Recargar transacciones si hubo cambios
+            onTransactionUpdated();
           }
         },
       ),
     );
   }
 
-  /// **Obtener el Nombre de la Categoría desde el ID**
   String _getCategoryName(int? categoryId) {
     if (categoryId == null) return "Sin Categoría";
     var category = categories.firstWhere(
@@ -84,7 +95,6 @@ class TransactionItem extends StatelessWidget {
     return category['name'];
   }
 
-  /// **Obtener el Nombre de la Cuenta desde el ID**
   String _getAccountName(int? accountId) {
     if (accountId == null) return "Desconocida";
     var account = accounts.firstWhere(

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../utils/app_colors.dart'; // 📌 Asegúrate de importar AppColors
 
 class DateSelector extends StatefulWidget {
   final DateTime initialDate;
   final String initialFilter;
-  final Function(DateTime, String) onDateChanged; // Función de callback para enviar la fecha y filtro actualizados
+  final Function(DateTime, String) onDateChanged;
 
   const DateSelector({
     Key? key,
@@ -28,31 +29,32 @@ class _DateSelectorState extends State<DateSelector> {
     selectedFilter = widget.initialFilter;
   }
 
-  /// 📌 Formatea la fecha según el filtro actual
   String _formatDate(DateTime date, String filter) {
     if (filter == 'Semanal') {
-      DateTime start = date.subtract(Duration(days: date.weekday - 1)); // lunes
-      DateTime end = start.add(const Duration(days: 6)); // domingo
+      DateTime start = date.subtract(Duration(days: date.weekday - 1));
+      DateTime end = start.add(const Duration(days: 6));
       return "${DateFormat('d/MM').format(start)} ~ ${DateFormat('d/MM').format(end)}";
     } else if (filter == 'Mensual' || filter == 'Calendario') {
       return DateFormat('MMMM yyyy').format(date);
     } else if (filter == 'Anual') {
       return DateFormat('yyyy').format(date);
     } else {
-      return DateFormat('d MMM yyyy').format(date); // fallback
+      return DateFormat('d MMM yyyy').format(date);
     }
   }
 
-
-
-
-  /// 📌 Método para seleccionar una nueva fecha desde el calendario
   Future<void> _selectDate(BuildContext context) async {
     DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context), // Respetamos el tema claro/oscuro
+          child: child!,
+        );
+      },
     );
 
     if (pickedDate != null && pickedDate != selectedDate) {
@@ -63,7 +65,6 @@ class _DateSelectorState extends State<DateSelector> {
     }
   }
 
-  /// 📌 Método para cambiar el filtro
   void _changeFilter(String filter) {
     setState(() {
       selectedFilter = filter;
@@ -71,7 +72,6 @@ class _DateSelectorState extends State<DateSelector> {
     widget.onDateChanged(selectedDate, selectedFilter);
   }
 
-  /// 📌 Método para cambiar la fecha con las flechas
   void _changeDate(bool next) {
     setState(() {
       if (selectedFilter == 'Semanal') {
@@ -98,32 +98,35 @@ class _DateSelectorState extends State<DateSelector> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-
         /// 📌 Selector de fecha con flechas
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             IconButton(
               icon: const Icon(Icons.chevron_left),
+              color: Theme.of(context).iconTheme.color,
               onPressed: () => _changeDate(false),
             ),
             GestureDetector(
               onTap: () => _selectDate(context),
               child: Text(
                 _formatDate(selectedDate, selectedFilter),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right),
+              color: Theme.of(context).iconTheme.color,
               onPressed: () => _changeDate(true),
             ),
           ],
         ),
-        /// 📌 Selector de filtro (Diaria, Semanal, Calendario, Anual)
+
+        /// 📌 Selector de filtro (Semanal, Mensual, Calendario, Anual)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: ['Semanal', 'Mensual', 'Calendario', 'Anual'].map((filter) {
+            final bool isSelected = selectedFilter == filter;
             return GestureDetector(
               onTap: () => _changeFilter(filter),
               child: Column(
@@ -132,14 +135,15 @@ class _DateSelectorState extends State<DateSelector> {
                     filter,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: selectedFilter == filter ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   ),
-                  if (selectedFilter == filter)
+                  if (isSelected)
                     Container(
                       height: 3,
                       width: 50,
-                      color: Colors.red, // Línea roja debajo del seleccionado
+                      color: AppColors.primaryColor,
                     ),
                 ],
               ),

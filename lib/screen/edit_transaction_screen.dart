@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
 import '../widgets/account_selector.dart';
 import '../widgets/category_selector.dart';
@@ -32,7 +33,6 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   int? selectedCategory;
   int? linkedAccount;
 
-
   @override
   void initState() {
     super.initState();
@@ -56,90 +56,76 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Editar Transacción")),
+      appBar: AppBar(title: Text("Editar Transacción", style: Theme.of(context).textTheme.titleLarge)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildTransactionTypeSelector(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 15),
             _buildDateSelector(),
-            const SizedBox(height: 12),
-
+            const SizedBox(height: 15),
 
             AccountSelector(
               accounts: widget.accounts,
               onSelect: (id) => setState(() => selectedAccount = id),
-              initialSelectedId: selectedAccount, // ✅ Aquí se inicializa el valor anterior
+              initialSelectedId: selectedAccount,
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 15),
 
             if (selectedType == 'transfer')
               AccountSelector(
-                accounts: widget.accounts
-                    .where((acc) => acc['id'] != selectedAccount)
-                    .toList(),
-                onSelect: (int id) {
-                  setState(() => linkedAccount = id);
-                },
+                accounts: widget.accounts.where((acc) => acc['id'] != selectedAccount).toList(),
+                onSelect: (int id) => setState(() => linkedAccount = id),
                 initialSelectedId: linkedAccount,
               ),
-
-            const SizedBox(height: 12),
 
             if (selectedType != 'transfer')
               CategorySelector(
                 categories: widget.categories,
                 transactionType: selectedType,
                 onSelect: (id) => setState(() => selectedCategory = id),
-                initialSelectedId: selectedCategory, // ✅ Carga la categoría existente
+                initialSelectedId: selectedCategory,
               ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 15),
 
             TextField(
               keyboardType: TextInputType.number,
               controller: amountController,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*')) // Permite decimales con dos decimales
-              ],
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
               decoration: InputDecoration(
                 labelText: "Monto",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
-                  borderSide: const BorderSide(
-                    width: 1,
-                    style: BorderStyle.none,
-                  ),
                 ),
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 15),
 
             TextField(
               controller: noteController,
               decoration: InputDecoration(
                 labelText: "Nota (opcional)",
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(
-                      width: 1,
-                      style: BorderStyle.none,
-                    )
+                  borderRadius: BorderRadius.circular(15),
                 ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _updateTransaction,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.ingresoColor,
+                    ),
                     child: const Text("Actualizar", style: TextStyle(color: Colors.white)),
                   ),
                 ),
@@ -147,7 +133,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _confirmDeleteTransaction,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.errorColor,
+                    ),
                     child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
                   ),
                 ),
@@ -159,7 +147,6 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     );
   }
 
-  /// **📌 Confirmación antes de eliminar una transacción**
   void _confirmDeleteTransaction() {
     showDialog(
       context: context,
@@ -169,15 +156,15 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           content: const Text("¿Estás seguro de que deseas eliminar esta transacción? Esta acción no se puede deshacer."),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // Cerrar el diálogo sin eliminar
+              onPressed: () => Navigator.pop(context),
               child: const Text("Cancelar"),
             ),
             TextButton(
               onPressed: () async {
                 await _deleteTransaction();
-                Navigator.pop(context, true); // Cerrar diálogo
+                Navigator.pop(context, true);
               },
-              child: const Text("Eliminar", style: TextStyle(color: Colors.red)),
+              child: Text("Eliminar", style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           ],
         );
@@ -212,12 +199,42 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           children: [
             Text(
               DateFormat('d MMM y').format(selectedDate),
-              style: const TextStyle(fontSize: 16),
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
             const Icon(Icons.calendar_today, size: 20, color: Colors.grey),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTransactionTypeSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: ['Gasto', 'Ingreso', 'Transferencia'].map((type) {
+        bool isSelected = _mapTypeToDB(type) == selectedType;
+        return GestureDetector(
+          onTap: () => _changeType(type),
+          child: Column(
+            children: [
+              Text(
+                type,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? Theme.of(context).primaryColor : null,
+                ),
+              ),
+              if (isSelected)
+                Container(
+                  height: 3,
+                  width: 50,
+                  color: Theme.of(context).primaryColor,
+                ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -234,45 +251,13 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     }
   }
 
-  /// **📌 Selector de Tipo de Transacción**
-  Widget _buildTransactionTypeSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: ['Gasto', 'Ingreso', 'Transferencia'].map((type) {
-        bool isSelected = _mapTypeToDB(type) == selectedType;
-        return GestureDetector(
-          onTap: () => _changeType(type),
-          child: Column(
-            children: [
-              Text(
-                type,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              if (isSelected)
-                Container(
-                  height: 3,
-                  width: 50,
-                  color: Colors.red,
-                ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Future<void> _updateTransaction() async {
     double amount = double.tryParse(amountController.text) ?? 0.0;
 
-    // ✅ Buscar cuenta seleccionada
     final selectedAcc = widget.accounts.firstWhere((acc) => acc['id'] == selectedAccount);
     final currentBalance = selectedAcc['balance'] as double;
     final balanceMode = selectedAcc['balance_mode'] ?? 'default';
 
-    // ✅ Validar saldo en transferencias y gastos si la cuenta no permite negativo
     if ((selectedType == 'transfer' || selectedType == 'expense') &&
         balanceMode == 'debit' &&
         amount > currentBalance) {
@@ -281,7 +266,6 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
       );
       return;
     }
-
 
     Map<String, dynamic> updatedTransaction = {
       'account_id': selectedAccount,
@@ -296,8 +280,6 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     await _dbHelper.updateTransaction(widget.transaction['id'], updatedTransaction);
     Navigator.pop(context, true);
   }
-
-
 
   Future<void> _deleteTransaction() async {
     await _dbHelper.deleteTransaction(widget.transaction['id']);

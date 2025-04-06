@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 class AccountSelector extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
@@ -30,11 +31,10 @@ class _AccountSelectorState extends State<AccountSelector> {
     return GestureDetector(
       onTap: () => _showAccountModal(),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.grey),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -47,7 +47,7 @@ class _AccountSelectorState extends State<AccountSelector> {
                   : "Seleccionar Cuenta",
               style: const TextStyle(fontSize: 16),
             ),
-            const Icon(Icons.arrow_drop_down, size: 24, color: Colors.grey),
+            Icon(Icons.arrow_drop_down, size: 24, color: Theme.of(context).iconTheme.color),
           ],
         ),
       ),
@@ -60,6 +60,7 @@ class _AccountSelectorState extends State<AccountSelector> {
       isScrollControlled: true,
       builder: (context) {
         return Container(
+          color: Theme.of(context).scaffoldBackgroundColor, // 🔥 Fondo adaptativo
           padding: const EdgeInsets.all(16),
           height: MediaQuery.of(context).size.height * 0.5,
           child: Column(

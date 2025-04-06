@@ -31,7 +31,6 @@ class _MainScreenState extends State<MainScreen> {
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
   final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey();
 
-
   @override
   void initState() {
     super.initState();
@@ -74,8 +73,8 @@ class _MainScreenState extends State<MainScreen> {
       if (result == true) {
         await fetchData();
         _dashboardKey.currentState?.reloadDashboard();
-        _accountsKey.currentState?.reloadAccounts(); // 👈 ACTUALIZA cuentas también
-        setState(() => _currentIndex = 0); // Regresar a dashboard
+        _accountsKey.currentState?.reloadAccounts();
+        setState(() => _currentIndex = 0);
       }
     } else {
       setState(() => _currentIndex = index);
@@ -107,7 +106,7 @@ class _MainScreenState extends State<MainScreen> {
       ReportsScreen(),
       const SizedBox(),
       AccountsScreen(
-        key: _accountsKey, // 👈 Aquí pasamos el key
+        key: _accountsKey,
       ),
       SettingsScreen(),
     ];
@@ -115,26 +114,27 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomAppBar(
+        color: Theme.of(context).scaffoldBackgroundColor,
         shape: const CircularNotchedRectangle(),
         notchMargin: 4,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: const Icon(Icons.home),
+              icon: Icon(Icons.home, color: _currentIndex == 0 ? Theme.of(context).primaryColor : Colors.grey),
               onPressed: () => _onTabTapped(0),
             ),
             IconButton(
-              icon: const Icon(Icons.bar_chart),
+              icon: Icon(Icons.bar_chart, color: _currentIndex == 1 ? Theme.of(context).primaryColor : Colors.grey),
               onPressed: () => _onTabTapped(1),
             ),
-            const SizedBox(width: 40),
+            const SizedBox(width: 40), // Espacio para FAB
             IconButton(
-              icon: const Icon(Icons.account_balance_wallet),
+              icon: Icon(Icons.account_balance_wallet, color: _currentIndex == 3 ? Theme.of(context).primaryColor : Colors.grey),
               onPressed: () => _onTabTapped(3),
             ),
             IconButton(
-              icon: const Icon(Icons.settings),
+              icon: Icon(Icons.settings, color: _currentIndex == 4 ? Theme.of(context).primaryColor : Colors.grey),
               onPressed: () => _onTabTapped(4),
             ),
           ],
@@ -143,10 +143,10 @@ class _MainScreenState extends State<MainScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _onTabTapped(2),
+        backgroundColor: Theme.of(context).primaryColor,
         shape: const CircleBorder(),
         elevation: 15,
         child: const Icon(Icons.add, color: Colors.white),
-        backgroundColor: Colors.red,
       ),
     );
   }

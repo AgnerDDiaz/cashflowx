@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../utils/app_colors.dart';
 
 class AccountCategoryHeader extends StatelessWidget {
   final String category;
@@ -18,35 +19,53 @@ class AccountCategoryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'en_US', symbol: '\$');
-    final color = totalBalance >= 0 ? Colors.blue : Colors.red;
-    final textColor = isHidden ? Colors.grey : color;
+    final color = totalBalance >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
+    final textColor = isHidden ? Theme.of(context).disabledColor : color;
+
+    final backgroundColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : Theme.of(context).cardColor;
 
     return Container(
-      color: Colors.grey[200],
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      color: backgroundColor,
+      child: Column(
         children: [
-          Text(
-            category,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  category,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  formatter.format(totalBalance),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: textColor,
+                  ),
+                ),
+              ],
             ),
           ),
-          Text(
-            formatter.format(totalBalance),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              color: textColor,
-            ),
+          Divider(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            height: 12,
+            thickness: 12,
+            indent: 0,
+            endIndent: 0,
           ),
         ],
       ),
     );
   }
 }
+
 
 class AccountTile extends StatelessWidget {
   final String name;
@@ -70,31 +89,38 @@ class AccountTile extends StatelessWidget {
     Color color;
 
     if (!visible) {
-      color = Colors.grey;
+      color = Theme.of(context).disabledColor;
     } else if (balance >= 0) {
-      color = Colors.green;
+      color = AppColors.ingresoColor;
     } else {
-      color = Colors.red;
+      color = AppColors.gastoColor;
     }
 
-    return ListTile(
-      title: Text(
-        name,
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 15,
-          color: visible ? Colors.black : Colors.grey,
+    final backgroundColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : Theme.of(context).cardColor;
+
+    return Container(
+      color: backgroundColor,
+      child: ListTile(
+        title: Text(
+          name,
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            color: visible ? Theme.of(context).textTheme.bodyLarge?.color : Theme.of(context).disabledColor,
+          ),
         ),
-      ),
-      trailing: Text(
-        formatter.format(balance),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 15,
+        trailing: Text(
+          formatter.format(balance),
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
         ),
+        onTap: onTap,
       ),
-      onTap: onTap,
     );
   }
 }
@@ -121,56 +147,63 @@ class CreditCardTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'en_US', symbol: currency);
 
-    return ListTile(
-      title: Text(
-        name,
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 15,
-          color: visible ? Colors.black : Colors.grey,
+    final backgroundColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : Theme.of(context).cardColor;
+
+    return Container(
+      color: backgroundColor,
+      child: ListTile(
+        title: Text(
+          name,
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            color: visible ? Theme.of(context).textTheme.bodyLarge?.color : Theme.of(context).disabledColor,
+          ),
         ),
+        subtitle: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Pago próximo",
+              style: TextStyle(
+                color: visible ? AppColors.gastoColor.withOpacity(0.7) : Theme.of(context).disabledColor,
+                fontSize: 13,
+              ),
+            ),
+            Text(
+              "Crédito restante",
+              style: TextStyle(
+                color: visible ? AppColors.gastoColor.withOpacity(0.7) : Theme.of(context).disabledColor,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+        trailing: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              formatter.format(dueAmount),
+              style: TextStyle(
+                color: visible ? AppColors.gastoColor : Theme.of(context).disabledColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            Text(
+              formatter.format(remainingCredit),
+              style: TextStyle(
+                color: visible ? AppColors.gastoColor : Theme.of(context).disabledColor,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+        onTap: onTap,
       ),
-      subtitle: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            "Pago próximo",
-            style: TextStyle(
-              color: visible ? Colors.red[400] : Colors.grey,
-              fontSize: 13,
-            ),
-          ),
-          Text(
-            "Crédito restante",
-            style: TextStyle(
-              color: visible ? Colors.red[400] : Colors.grey,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-      trailing: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            formatter.format(dueAmount),
-            style: TextStyle(
-              color: visible ? Colors.red : Colors.grey,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          Text(
-            formatter.format(remainingCredit),
-            style: TextStyle(
-              color: visible ? Colors.red : Colors.grey,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
-      onTap: onTap,
     );
   }
 }

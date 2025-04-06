@@ -7,6 +7,10 @@ import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
 import '../widgets/date_selector.dart';
 import 'add_transaction_screen.dart';
+import '../utils/app_colors.dart'; // Asegúrate que esté importado arriba
+
+
+
 
 class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
@@ -58,7 +62,9 @@ class DashboardScreenState extends State<DashboardScreen> {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         centerTitle: true,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
+
       ),
 
       body: Column(
@@ -281,7 +287,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         .where((t) => t['type'] == 'expense')
         .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
 
-    return (income - expense) >= 0 ? Colors.green : Colors.red;
+    return (income - expense) >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
   }
 
 }

@@ -1,25 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart'; // 👈 Agregado
 import 'package:cashflowx/utils/database_helper.dart';
 import 'package:cashflowx/screen/main_screen.dart';
-import 'package:cashflowx/utils/theme.dart'; // 👈 Agregado para el tema
+import 'package:cashflowx/utils/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized(); // 👈 Muy importante
 
   await DatabaseHelper().resetDatabase();
 
   final dbHelper = DatabaseHelper();
 
-  // Carga los datos necesarios para toda la app
   List<Map<String, dynamic>> accounts = await dbHelper.getAccounts();
   List<Map<String, dynamic>> categories = await dbHelper.getCategories();
   List<Map<String, dynamic>> transactions = await dbHelper.getTransactions();
 
-  runApp(MyApp(
-    accounts: accounts,
-    categories: categories,
-    transactions: transactions,
-  ));
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('en'),
+        Locale('es')
+      ],
+      path: 'assets/l10n', // 👈 Aquí están los JSON
+      fallbackLocale: const Locale('en'),
+      child: MyApp(
+        accounts: accounts,
+        categories: categories,
+        transactions: transactions,
+      ),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -39,14 +50,17 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'CashFlowX',
       debugShowCheckedModeBanner: false,
-      theme: darkTheme, // 👈 Tema claro
-      darkTheme: darkTheme, // 👈 Tema oscuro
-      themeMode: ThemeMode.system, // 👈 Seguirá el modo del dispositivo
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: ThemeMode.system,
       home: MainScreen(
         accounts: accounts,
         categories: categories,
         transactions: transactions,
       ),
+      localizationsDelegates: context.localizationDelegates, // 👈 Easy localization
+      supportedLocales: context.supportedLocales, // 👈 Easy localization
+      locale: context.locale, // 👈 Easy localization
     );
   }
 }
