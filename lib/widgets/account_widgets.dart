@@ -56,8 +56,8 @@ class AccountCategoryHeader extends StatelessWidget {
           ),
           Divider(
             color: Theme.of(context).scaffoldBackgroundColor,
-            height: 12,
-            thickness: 12,
+            height: 6,
+            thickness: 6,
             indent: 0,
             endIndent: 0,
           ),

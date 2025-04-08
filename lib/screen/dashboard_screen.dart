@@ -59,6 +59,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+
         title: Text(
           'app_title'.tr(),
           style: Theme.of(context).textTheme.titleLarge,
@@ -67,7 +68,9 @@ class DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
 
+
       ),
+
 
       body: Column(
         children: [

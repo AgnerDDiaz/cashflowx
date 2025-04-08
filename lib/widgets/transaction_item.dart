@@ -1,9 +1,11 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../screen/edit_transaction_screen.dart';
-import '../utils/app_colors.dart'; // 📌 Asegúrate de importar AppColors
+import '../utils/app_colors.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 
-class TransactionItem extends StatelessWidget {
+class TransactionItem extends StatefulWidget {
   final Map<String, dynamic> transaction;
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
@@ -18,14 +20,48 @@ class TransactionItem extends StatelessWidget {
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    String type = transaction['type'];
-    double amount = transaction['amount'] ?? 0.0;
-    String category = _getCategoryName(transaction['category_id']);
-    String account = _getAccountName(transaction['account_id']);
+  _TransactionItemState createState() => _TransactionItemState();
+}
 
-    String linkedAccountName = transaction['linked_account_id'] != null
-        ? _getAccountName(transaction['linked_account_id'])
+class _TransactionItemState extends State<TransactionItem> {
+  final ExchangeRateService _exchangeRateService = ExchangeRateService();
+  double? convertedAmount;
+  String? mainCurrency;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConvertedAmount();
+  }
+
+  Future<void> _loadConvertedAmount() async {
+    String transactionCurrency = widget.transaction['currency'] ?? 'DOP';
+    double amount = widget.transaction['amount'] ?? 0.0;
+
+    mainCurrency = await SettingsHelper().getMainCurrency();
+
+    if (transactionCurrency != mainCurrency) {
+      double converted = await _exchangeRateService.convertAmount(
+        context,
+        amount,
+        transactionCurrency,
+      );
+      setState(() {
+        convertedAmount = converted;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String type = widget.transaction['type'];
+    double amount = widget.transaction['amount'] ?? 0.0;
+    String category = _getCategoryName(widget.transaction['category_id']);
+    String account = _getAccountName(widget.transaction['account_id']);
+    String transactionCurrency = widget.transaction['currency'] ?? 'DOP';
+
+    String linkedAccountName = widget.transaction['linked_account_id'] != null
+        ? _getAccountName(widget.transaction['linked_account_id'])
         : '';
 
     if (type == 'transfer') {
@@ -59,28 +95,39 @@ class TransactionItem extends StatelessWidget {
           account,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-        trailing: Text(
-          "\$${amount.toStringAsFixed(2)}",
-          style: TextStyle(
-            color: amountColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              "$transactionCurrency ${amount.toStringAsFixed(2)}",
+              style: TextStyle(
+                color: amountColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            if (convertedAmount != null && mainCurrency != null)
+              Text(
+                "≈ ${convertedAmount!.toStringAsFixed(2)} $mainCurrency",
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+          ],
         ),
         onTap: () async {
           bool? updated = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => EditTransactionScreen(
-                transaction: transaction,
-                accounts: accounts,
-                categories: categories,
+                transaction: widget.transaction,
+                accounts: widget.accounts,
+                categories: widget.categories,
               ),
             ),
           );
 
           if (updated == true) {
-            onTransactionUpdated();
+            widget.onTransactionUpdated();
           }
         },
       ),
@@ -89,7 +136,7 @@ class TransactionItem extends StatelessWidget {
 
   String _getCategoryName(int? categoryId) {
     if (categoryId == null) return "no_category".tr();
-    var category = categories.firstWhere(
+    var category = widget.categories.firstWhere(
           (cat) => cat['id'] == categoryId,
       orElse: () => {'name': 'no_category'.tr()},
     );
@@ -98,7 +145,7 @@ class TransactionItem extends StatelessWidget {
 
   String _getAccountName(int? accountId) {
     if (accountId == null) return "unknown".tr();
-    var account = accounts.firstWhere(
+    var account = widget.accounts.firstWhere(
           (acc) => acc['id'] == accountId,
       orElse: () => {'name': 'unknown'.tr()},
     );

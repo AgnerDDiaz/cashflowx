@@ -78,6 +78,7 @@ class DatabaseHelper {
       linked_account_id INTEGER,
       type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
       amount REAL NOT NULL CHECK (amount > 0),
+      currency TEXT NOT NULL DEFAULT 'DOP', -- 👈 AÑADIMOS ESTE CAMPO
       category_id INTEGER DEFAULT NULL,
       date TEXT NOT NULL,
       note TEXT DEFAULT NULL,
@@ -86,6 +87,7 @@ class DatabaseHelper {
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
       CHECK (type <> 'transfer' OR linked_account_id IS NOT NULL)
     );
+
     ''');
 
     await db.execute('''
@@ -384,6 +386,7 @@ class DatabaseHelper {
         'account_id': 1,
         'type': 'expense',
         'amount': 200.0,
+        'currency': 'DOP', // 👈 NUEVO
         'category_id': await getCategoryId('Comida'),
         'date': '2025-03-18',
         'note': 'Cena en restaurante'
@@ -392,6 +395,7 @@ class DatabaseHelper {
         'account_id': 1,
         'type': 'expense',
         'amount': 100.0,
+        'currency': 'DOP', // 👈 NUEVO
         'category_id': await getCategoryId('Transporte'),
         'date': '2025-03-18',
         'note': 'Taxi'
@@ -400,6 +404,7 @@ class DatabaseHelper {
         'account_id': 2,
         'type': 'income',
         'amount': 10000.0,
+        'currency': 'DOP', // 👈 NUEVO
         'category_id': await getCategoryId('Sueldo'),
         'date': '2025-03-17',
         'note': 'Salario mensual'
@@ -408,6 +413,7 @@ class DatabaseHelper {
         'account_id': 3,
         'type': 'transfer',
         'amount': 2000.0,
+        'currency': 'DOP', // 👈 NUEVO
         'category_id': null,
         'linked_account_id': 4, // Asegurar que tiene una cuenta destino
         'date': '2025-03-16',
@@ -417,6 +423,7 @@ class DatabaseHelper {
         'account_id': 4,
         'type': 'expense',
         'amount': 5000.0,
+        'currency': 'DOP', // 👈 NUEVO
         'category_id': await getCategoryId('Deudas'),
         'date': '2025-03-15',
         'note': 'Pago parcial de deuda'
@@ -427,33 +434,6 @@ class DatabaseHelper {
         await db.insert('transactions', transaction);
     }
   }
-
-  // ✅ Obtener tasa de cambio de una moneda a otra
-  Future<double> getExchangeRate(String baseCurrency, String targetCurrency) async {
-    final db = await database;
-
-    // Si las monedas son iguales, no hay conversión
-    if (baseCurrency == targetCurrency) {
-      return 1.0;
-    }
-
-    final result = await db.query(
-      'exchange_rates',
-      where: 'base_currency = ? AND target_currency = ?',
-      whereArgs: [baseCurrency, targetCurrency],
-      limit: 1,
-    );
-
-    if (result.isEmpty) {
-      throw Exception('No se encontró tasa de cambio de $baseCurrency a $targetCurrency');
-    }
-
-    return result.first['rate'] as double;
-  }
-
-
-
-
 
 
 // Métodos para las operaciones CRUD
@@ -517,10 +497,12 @@ class DatabaseHelper {
       'linked_account_id': transaction['type'] == 'transfer' ? transaction['linked_account_id'] : null,
       'type': transaction['type'],
       'amount': transaction['amount'],
+      'currency': transaction['currency'], // 👈 AÑADIMOS ESTA LÍNEA
       'category_id': transaction['category_id'],
       'date': transaction['date'],
       'note': transaction['note'],
     });
+
 
     // ⚡ Actualizar el balance de la(s) cuenta(s)
     if (transaction['type'] == 'income') {
@@ -811,6 +793,30 @@ class DatabaseHelper {
   }
 
   // Exchange Rates
+
+  // ✅ Obtener tasa de cambio de una moneda a otra
+  Future<double> getExchangeRate(String baseCurrency, String targetCurrency) async {
+    final db = await database;
+
+    // Si las monedas son iguales, no hay conversión
+    if (baseCurrency == targetCurrency) {
+      return 1.0;
+    }
+
+    final result = await db.query(
+      'exchange_rates',
+      where: 'base_currency = ? AND target_currency = ?',
+      whereArgs: [baseCurrency, targetCurrency],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      throw Exception('No se encontró tasa de cambio de $baseCurrency a $targetCurrency');
+    }
+
+    return result.first['rate'] as double;
+  }
+
   Future<List<Map<String, dynamic>>> getExchangeRates() async {
     final db = await database;
     return await db.query('exchange_rates');
@@ -835,6 +841,73 @@ class DatabaseHelper {
       whereArgs: [baseCurrency, targetCurrency],
     );
   }
+
+  /// ✅ Corregido: Obtener una tasa de cambio guardada
+  Future<Map<String, dynamic>?> getExchangeRateDetails(String fromCurrency, String toCurrency) async {
+    final db = await database;
+
+    final result = await db.query(
+      'exchange_rates',
+      where: 'base_currency = ? AND target_currency = ?',
+      whereArgs: [fromCurrency, toCurrency],
+    );
+
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
+
+
+  /// Guardar o actualizar una tasa de cambio
+  Future<void> saveOrUpdateExchangeRate(String fromCurrency, String toCurrency, double rate) async {
+    final db = await database;
+
+    final existing = await db.query(
+      'exchange_rates',
+      where: 'base_currency = ? AND target_currency = ?',
+      whereArgs: [fromCurrency, toCurrency],
+    );
+
+    if (existing.isNotEmpty) {
+      await db.update(
+        'exchange_rates',
+        {
+          'rate': rate,
+          'last_updated': DateTime.now().toIso8601String(),
+        },
+        where: 'base_currency = ? AND target_currency = ?',
+        whereArgs: [fromCurrency, toCurrency],
+      );
+    } else {
+      await db.insert('exchange_rates', {
+        'base_currency': fromCurrency,
+        'target_currency': toCurrency,
+        'rate': rate,
+        'last_updated': DateTime.now().toIso8601String(),
+      });
+    }
+  }
+
+
+  /// Actualizar manualmente una tasa de cambio
+  Future<void> updateExchangeRateManual(String fromCurrency, String toCurrency, double newRate) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+
+    await db.update(
+      'exchange_rates',
+      {
+        'rate': newRate,
+        'last_updated': now,
+      },
+      where: 'from_currency = ? AND to_currency = ?',
+      whereArgs: [fromCurrency, toCurrency],
+    );
+  }
+
+
 
   // Método para cerrar la base de datos
   Future<void> closeDatabase() async {
