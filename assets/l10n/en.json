@@ -50,9 +50,16 @@
   "thursday": "Thu",
   "friday": "Fri",
   "category": "Category",
-  "unknown_category": "Unknown_category"
-
-
+  "unknown_category": "Unknown_category",
+  "others": "Others...",
+  "no_currencies_found": "No currencies found",
+  "other_currency": "Other",
+  "add_new_currency": "Add new currency",
+  "search_currency": "Search currency",
+  "select_currency": "Select currency",
+  "confirm_add_currency": "Confirm add currency?",
+  "error_no_internet": "Could not connect. Add rate manually?",
+  "enter_exchange_rate": "Enter the exchange rate"
 
 }
 

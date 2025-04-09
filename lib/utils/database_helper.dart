@@ -292,6 +292,41 @@ class DatabaseHelper {
       'rate': 63.75,
       'last_updated': '2025-04-03',
     });
+    await db.insert('exchange_rates', {
+      'base_currency': 'GBP',
+      'target_currency': 'DOP',
+      'rate': 74.23,
+      'last_updated': '2025-04-03',
+    });
+
+    await db.insert('exchange_rates', {
+      'base_currency': 'CAD',
+      'target_currency': 'DOP',
+      'rate': 42.15,
+      'last_updated': '2025-04-03',
+    });
+
+    await db.insert('exchange_rates', {
+      'base_currency': 'JPY',
+      'target_currency': 'DOP',
+      'rate': 0.53,
+      'last_updated': '2025-04-03',
+    });
+
+    await db.insert('exchange_rates', {
+      'base_currency': 'MXN',
+      'target_currency': 'DOP',
+      'rate': 3.42,
+      'last_updated': '2025-04-03',
+    });
+
+    await db.insert('exchange_rates', {
+      'base_currency': 'CHF',
+      'target_currency': 'DOP',
+      'rate': 64.11,
+      'last_updated': '2025-04-03',
+    });
+
 
 
 
@@ -547,6 +582,34 @@ class DatabaseHelper {
 
     return transactions;
   }
+
+  Future<List<String>> getAllCurrencies() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+    SELECT DISTINCT base_currency FROM exchange_rates
+    UNION
+    SELECT DISTINCT target_currency FROM exchange_rates
+  ''');
+
+    return result.map((row) => row['base_currency'] as String).toList();
+  }
+
+
+
+
+  Future<List<String>> getAllCurrenciesCodes() async {
+    final db = await database;
+    final result = await db.query(
+      'exchange_rates',
+      columns: ['base_currency'],
+      distinct: true,
+    );
+
+    List<String> currencies = result.map((row) => row['base_currency'] as String).toSet().toList();
+
+    return currencies;
+  }
+
 
 
   Future<int> updateTransaction(int id, Map<String, dynamic> updatedTransaction) async {

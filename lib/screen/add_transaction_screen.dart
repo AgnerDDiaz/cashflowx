@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../utils/exchange_rate_service.dart';
-import '../utils/currency_service.dart';
 import '../utils/settings_helper.dart';
 import '../utils/app_colors.dart';
 import '../widgets/account_selector.dart';
 import '../widgets/category_selector.dart';
+import '../screen/select_currency_screen.dart'; // Correcto
 
 class AddTransactionScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
@@ -21,7 +21,7 @@ class AddTransactionScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _AddTransactionScreenState createState() => _AddTransactionScreenState();
+  State<AddTransactionScreen> createState() => _AddTransactionScreenState();
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
@@ -30,7 +30,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final TextEditingController noteController = TextEditingController();
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
-  final CurrencyService _currencyService = CurrencyService();
 
   String selectedType = 'expense';
   int? selectedAccount;
@@ -38,7 +37,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   int? linkedAccount;
   String selectedCurrency = 'DOP';
   double? convertedAmount;
-  List<Map<String, String>> availableCurrencies = [];
+  List<String> availableCurrencies = [];
   String? mainCurrency;
 
   @override
@@ -49,25 +48,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    try {
-      mainCurrency = await SettingsHelper().getMainCurrency();
-      final currencies = await _currencyService.getSupportedCurrencies();
-      setState(() {
-        selectedCurrency = mainCurrency ?? 'DOP';
-        availableCurrencies = currencies;
-      });
-      _updateConvertedAmount();
-    } catch (e) {
-      print('Error cargando monedas: $e');
-    }
-  }
+    mainCurrency = await SettingsHelper().getMainCurrency();
+    final currencies = await _dbHelper.getAllCurrenciesCodes();
 
-  void _changeType(String type) {
     setState(() {
-      selectedType = _mapLocalizedTypeToDB(type);
-      selectedCategory = null;
-      linkedAccount = null;
+      selectedCurrency = mainCurrency ?? 'DOP';
+      availableCurrencies = currencies.take(4).toList();
     });
+
+    _updateConvertedAmount();
   }
 
   void _updateConvertedAmount() async {
@@ -98,12 +87,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-
-    if (args != null && args.containsKey('date')) {
-      selectedDate = args['date'];
-    }
-
     return Scaffold(
       appBar: AppBar(title: Text("add_transaction".tr(), style: Theme.of(context).textTheme.titleLarge)),
       body: SingleChildScrollView(
@@ -129,34 +112,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             if (selectedType == 'transfer')
               AccountSelector(
                 accounts: widget.accounts.where((account) => account['id'] != selectedAccount).toList(),
-                onSelect: (selectedId) {
-                  setState(() {
-                    linkedAccount = selectedId;
-                  });
-                },
+                onSelect: (selectedId) => setState(() => linkedAccount = selectedId),
               ),
             if (selectedType != 'transfer')
               CategorySelector(
                 categories: widget.categories,
                 transactionType: selectedType,
-                onSelect: (selectedId) {
-                  setState(() {
-                    selectedCategory = selectedId;
-                  });
-                },
+                onSelect: (selectedId) => setState(() => selectedCategory = selectedId),
               ),
             const SizedBox(height: 15),
-            TextField(
-              keyboardType: TextInputType.number,
-              controller: amountController,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
-              decoration: InputDecoration(
-                labelText: "amount".tr(),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    keyboardType: TextInputType.number,
+                    controller: amountController,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
+                    decoration: InputDecoration(
+                      labelText: "amount".tr(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: _buildCurrencyDropdown(),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            _buildCurrencySelector(),
             if (convertedAmount != null && mainCurrency != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -176,14 +161,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             const SizedBox(height: 25),
             ElevatedButton(
               onPressed: _saveTransaction,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _getButtonColor(),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: _getButtonColor()),
               child: Center(
-                child: Text(
-                  "save_transaction".tr(),
-                  style: const TextStyle(fontSize: 16, color: Colors.white),
-                ),
+                child: Text("save_transaction".tr(), style: const TextStyle(fontSize: 16, color: Colors.white)),
               ),
             ),
           ],
@@ -192,30 +172,51 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildCurrencySelector() {
+  Widget _buildCurrencyDropdown() {
+    final List<DropdownMenuItem<String>> items = [
+      ...availableCurrencies.map((currencyCode) => DropdownMenuItem(
+        value: currencyCode,
+        child: Text(currencyCode, overflow: TextOverflow.ellipsis),
+      )),
+      DropdownMenuItem(
+        value: 'other',
+        child: Text("other_currency".tr()),
+      ),
+      if (!availableCurrencies.contains(selectedCurrency) && selectedCurrency != 'other')
+        DropdownMenuItem(
+          value: selectedCurrency,
+          child: Text(selectedCurrency, overflow: TextOverflow.ellipsis),
+        ),
+    ];
+
     return DropdownButtonFormField<String>(
       value: selectedCurrency,
-      decoration: InputDecoration(
-        labelText: 'Moneda',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-      ),
-      isExpanded: true,
-      items: availableCurrencies.map((currency) {
-        return DropdownMenuItem(
-          value: currency['code'],
-          child: Text("${currency['code']} - ${currency['name']}", overflow: TextOverflow.ellipsis),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) {
+      items: items,
+      onChanged: (value) async {
+        if (value == 'other') {
+          final selected = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SelectCurrencyScreen()),
+          );
+          if (selected != null && selected is String) {
+            setState(() => selectedCurrency = selected);
+            _updateConvertedAmount();
+          }
+        } else {
           setState(() {
-            selectedCurrency = value;
+            selectedCurrency = value!;
             _updateConvertedAmount();
           });
         }
       },
+      decoration: InputDecoration(
+        labelText: "currency".tr(),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+      ),
+      isExpanded: true,
     );
   }
+
 
   Widget _buildDateSelector() {
     return GestureDetector(
@@ -227,9 +228,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           lastDate: DateTime(2100),
         );
         if (pickedDate != null) {
-          setState(() {
-            selectedDate = pickedDate;
-          });
+          setState(() => selectedDate = pickedDate);
         }
       },
       child: Container(
@@ -241,10 +240,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              DateFormat('d MMM y').format(selectedDate),
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+            Text(DateFormat('d MMM y').format(selectedDate), style: Theme.of(context).textTheme.bodyLarge),
             const Icon(Icons.calendar_today, size: 20, color: Colors.grey),
           ],
         ),
@@ -302,10 +298,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (type == 'expenses'.tr()) return 'expense';
     if (type == 'income'.tr()) return 'income';
     if (type == 'transfer'.tr()) return 'transfer';
-    return 'expense'; // Siempre default a gasto
+    return 'expense';
   }
 
-
+  void _changeType(String type) {
+    setState(() {
+      selectedType = _mapTranslatedTypeToDB(type);
+      selectedCategory = null;
+      linkedAccount = null;
+    });
+  }
 
   Color _getButtonColor() {
     switch (selectedType) {
@@ -317,18 +319,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         return Colors.grey;
       default:
         return Theme.of(context).primaryColor;
-    }
-  }
-
-  String _mapLocalizedTypeToDB(String localizedType) {
-    if (localizedType == 'Gasto' || localizedType == 'expenses'.tr()) {
-      return 'expense';
-    } else if (localizedType == 'Ingreso' || localizedType == 'income'.tr()) {
-      return 'income';
-    } else if (localizedType == 'Transferencia' || localizedType == 'transfer'.tr()) {
-      return 'transfer';
-    } else {
-      return 'expense';
     }
   }
 

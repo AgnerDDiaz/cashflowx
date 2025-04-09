@@ -52,6 +52,17 @@
   "sunday": "Dom",
   "category": "Categoría",
   "unknown_category": "Categoría desconocida",
-  "annual": "Anual"
-
+  "annual": "Anual",
+  "others": "Otros...",
+  "other_currency": "Otros",
+  "add_new_currency": "Añadir nueva divisa",
+  "search_currency": "Buscar moneda",
+  "select_currency": "Seleccionar moneda",
+  "no_currencies_found": "No se encontraron monedas",
+  "confirm_add_currency": "¿Deseas agregar esta moneda?",
+  "error_no_internet": "No se pudo conectar. ¿Agregar tasa manualmente?",
+  "enter_exchange_rate": "Introduce la tasa de cambio"
 }
+
+
+
