@@ -11,15 +11,12 @@ class ExchangeRateService {
   ExchangeRateService._internal();
 
   final String _apiKey = 'ee448aaece0efef7f07bf7c5';
-  final String _apiUrl = 'https://v6.exchangerate-api.com/v6/'; // URL base
-
+  final String _apiUrl = 'https://v6.exchangerate-api.com/v6/';
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
-  /// ✅ Obtener la tasa de cambio entre dos monedas, manejando todo el flujo pedido
+  /// ✅ Obtener tasa de cambio, usando primero la base de datos local
   Future<double> getExchangeRate(BuildContext context, String fromCurrency, String toCurrency) async {
-    if (fromCurrency == toCurrency) {
-      return 1.0;
-    }
+    if (fromCurrency == toCurrency) return 1.0;
 
     final now = DateTime.now();
     final result = await _dbHelper.getExchangeRateDetails(fromCurrency, toCurrency);
@@ -50,7 +47,38 @@ class ExchangeRateService {
     }
   }
 
-  /// ✅ Consultar la API para obtener tasa de cambio fresca
+  /// ✅ Convertir monto automáticamente a la moneda principal del usuario
+  Future<double> convertAmount(BuildContext context, double amount, String fromCurrency) async {
+    final mainCurrency = await SettingsHelper().getMainCurrency();
+    final rate = await getExchangeRate(context, fromCurrency, mainCurrency);
+    return amount * rate;
+  }
+
+  /// ✅ NUEVO: Conversión solo local SIN pedir a la API (usa solo base de datos)
+  static Future<double> localConvert(double amount, String fromCurrency, String toCurrency) async {
+    if (fromCurrency == toCurrency) return amount;
+
+    final db = DatabaseHelper();
+
+    // Buscar tasa directa
+    final directRateDetail = await db.getExchangeRateDetails(fromCurrency, toCurrency);
+    if (directRateDetail != null && directRateDetail['rate'] != null) {
+      return amount * (directRateDetail['rate'] as double);
+    }
+
+    // Buscar tasa inversa
+    final inverseRateDetail = await db.getExchangeRateDetails(toCurrency, fromCurrency);
+    if (inverseRateDetail != null && inverseRateDetail['rate'] != null) {
+      return amount / (inverseRateDetail['rate'] as double);
+    }
+
+    // No se encontró ninguna tasa
+    print('⚠️ No se encontró tasa de cambio entre $fromCurrency y $toCurrency. Retornando mismo monto.');
+    return amount;
+  }
+
+
+  /// ✅ Consultar la API para tasa de cambio
   Future<double> _fetchExchangeRateFromAPI(String fromCurrency, String toCurrency) async {
     final response = await http.get(Uri.parse('$_apiUrl$_apiKey/latest/$fromCurrency'));
 
@@ -62,24 +90,24 @@ class ExchangeRateService {
         if (rates.containsKey(toCurrency)) {
           return (rates[toCurrency] as num).toDouble();
         } else {
-          throw Exception('No se encontró la tasa de cambio hacia $toCurrency');
+          throw Exception('No se encontró tasa hacia $toCurrency');
         }
       } else {
         throw Exception('Error al obtener tasa de cambio: ${data['error-type']}');
       }
     } else {
-      throw Exception('Fallo la conexión a la API de tipo de cambio');
+      throw Exception('Error de conexión a la API de tipo de cambio');
     }
   }
 
-  /// ✅ Preguntar al usuario para agregar tasa manualmente
+  /// ✅ Preguntar al usuario para agregar tasa manual
   Future<double> _askUserToAddRateManually(BuildContext context, String fromCurrency, String toCurrency, {double? oldRate}) async {
     double manualRate = oldRate ?? 1.0;
 
     await showDialog(
       context: context,
       builder: (context) {
-        final TextEditingController rateController = TextEditingController(text: manualRate.toString());
+        final rateController = TextEditingController(text: manualRate.toString());
 
         return AlertDialog(
           title: const Text('Agregar tasa de cambio manualmente'),
@@ -112,12 +140,5 @@ class ExchangeRateService {
     );
 
     return manualRate;
-  }
-
-  /// ✅ Convertir un monto automáticamente usando la moneda principal del usuario
-  Future<double> convertAmount(BuildContext context, double amount, String fromCurrency) async {
-    final mainCurrency = await SettingsHelper().getMainCurrency();
-    final rate = await getExchangeRate(context, fromCurrency, mainCurrency);
-    return amount * rate;
   }
 }

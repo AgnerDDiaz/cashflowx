@@ -38,14 +38,10 @@ class _TransactionItemState extends State<TransactionItem> {
     String transactionCurrency = widget.transaction['currency'] ?? 'DOP';
     double amount = widget.transaction['amount'] ?? 0.0;
 
-    mainCurrency = await SettingsHelper().getMainCurrency();
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
 
     if (transactionCurrency != mainCurrency) {
-      double converted = await _exchangeRateService.convertAmount(
-        context,
-        amount,
-        transactionCurrency,
-      );
+      double converted = await ExchangeRateService.localConvert(amount, transactionCurrency, mainCurrency!);
       setState(() {
         convertedAmount = converted;
       });
@@ -107,7 +103,7 @@ class _TransactionItemState extends State<TransactionItem> {
                 fontSize: 16,
               ),
             ),
-            if (convertedAmount != null && mainCurrency != null)
+            if (convertedAmount != null && mainCurrency != null && transactionCurrency != mainCurrency)
               Text(
                 "≈ ${convertedAmount!.toStringAsFixed(2)} $mainCurrency",
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),

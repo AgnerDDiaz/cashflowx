@@ -1,9 +1,10 @@
-// Este archivo contendrá los widgets reutilizables de la pantalla de cuentas.
+// === account_widgets.dart corregido ===
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_colors.dart';
+import '../utils/settings_helper.dart';
 
 class AccountCategoryHeader extends StatelessWidget {
   final String category;
@@ -11,62 +12,62 @@ class AccountCategoryHeader extends StatelessWidget {
   final bool isHidden;
 
   const AccountCategoryHeader({
-    super.key,
+    Key? key,
     required this.category,
     required this.totalBalance,
     this.isHidden = false,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(locale: 'en_US', symbol: '\$');
     final color = totalBalance >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
     final textColor = isHidden ? Theme.of(context).disabledColor : color;
 
-    final backgroundColor = Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : Theme.of(context).cardColor;
+    return FutureBuilder<String>(
+      future: SettingsHelper().getMainCurrency(),
+      builder: (context, snapshot) {
+        final mainCurrency = snapshot.data ?? 'DOP';
+        final formatter = NumberFormat.currency(locale: 'en_US', symbol: mainCurrency);
 
-    return Container(
-      color: backgroundColor,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  category,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+        return Container(
+          color: Theme.of(context).cardColor,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      category,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      formatter.format(totalBalance),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  formatter.format(totalBalance),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: textColor,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              Divider(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                height: 6,
+                thickness: 6,
+              ),
+            ],
           ),
-          Divider(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            height: 6,
-            thickness: 6,
-            indent: 0,
-            endIndent: 0,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
 
 class AccountTile extends StatelessWidget {
   final String name;
@@ -76,19 +77,17 @@ class AccountTile extends StatelessWidget {
   final VoidCallback? onTap;
 
   const AccountTile({
-    super.key,
+    Key? key,
     required this.name,
     required this.balance,
     required this.currency,
     this.visible = true,
     this.onTap,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(locale: 'en_US', symbol: currency);
     Color color;
-
     if (!visible) {
       color = Theme.of(context).disabledColor;
     } else if (balance >= 0) {
@@ -97,12 +96,8 @@ class AccountTile extends StatelessWidget {
       color = AppColors.gastoColor;
     }
 
-    final backgroundColor = Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : Theme.of(context).cardColor;
-
     return Container(
-      color: backgroundColor,
+      color: Theme.of(context).cardColor,
       child: ListTile(
         title: Text(
           name,
@@ -113,7 +108,7 @@ class AccountTile extends StatelessWidget {
           ),
         ),
         trailing: Text(
-          formatter.format(balance),
+          "$currency ${balance.toStringAsFixed(2)}",
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.bold,
@@ -135,25 +130,19 @@ class CreditCardTile extends StatelessWidget {
   final bool visible;
 
   const CreditCardTile({
-    super.key,
+    Key? key,
     required this.name,
     required this.dueAmount,
     required this.remainingCredit,
     required this.currency,
     this.onTap,
     this.visible = true,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(locale: 'en_US', symbol: currency);
-
-    final backgroundColor = Theme.of(context).brightness == Brightness.light
-        ? Colors.white
-        : Theme.of(context).cardColor;
-
     return Container(
-      color: backgroundColor,
+      color: Theme.of(context).cardColor,
       child: ListTile(
         title: Text(
           name,
@@ -187,7 +176,7 @@ class CreditCardTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              formatter.format(dueAmount),
+              "$currency ${dueAmount.toStringAsFixed(2)}",
               style: TextStyle(
                 color: visible ? AppColors.gastoColor : Theme.of(context).disabledColor,
                 fontWeight: FontWeight.bold,
@@ -195,7 +184,7 @@ class CreditCardTile extends StatelessWidget {
               ),
             ),
             Text(
-              formatter.format(remainingCredit),
+              "$currency ${remainingCredit.toStringAsFixed(2)}",
               style: TextStyle(
                 color: visible ? AppColors.gastoColor : Theme.of(context).disabledColor,
                 fontSize: 13,

@@ -2,16 +2,15 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 import '../widgets/annual_summary_view.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
 import '../widgets/date_selector.dart';
 import 'add_transaction_screen.dart';
-import '../utils/app_colors.dart'; // Asegúrate que esté importado arriba
-
-
-
+import '../utils/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
@@ -19,9 +18,6 @@ class DashboardScreen extends StatefulWidget {
   final List<Map<String, dynamic>> categories;
   static DateTime lastSelectedDate = DateTime.now();
   static String lastSelectedFilter = "monthly";
-
-
-
 
   const DashboardScreen({
     Key? key,
@@ -35,10 +31,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class DashboardScreenState extends State<DashboardScreen> {
-  // 👇 Añadir este método para que MainScreen pueda llamarlo
   void reloadDashboard() {
     _loadTransactions();
   }
+
   late DateTime selectedDate;
   late String selectedFilter;
 
@@ -46,32 +42,30 @@ class DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> accounts = [];
   List<Map<String, dynamic>> categories = [];
 
+  String mainCurrency = 'DOP'; // 👈 Para conversión
+
   @override
   void initState() {
     super.initState();
     selectedDate = DashboardScreen.lastSelectedDate;
     selectedFilter = DashboardScreen.lastSelectedFilter;
-    _loadTransactions();
+    _loadInitialData();
   }
 
+  Future<void> _loadInitialData() async {
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    await _loadTransactions();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-
-        title: Text(
-          'app_title'.tr(),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        title: Text('app_title'.tr(), style: Theme.of(context).textTheme.titleLarge),
         centerTitle: true,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
-
-
       ),
-
-
       body: Column(
         children: [
           DateSelector(
@@ -81,15 +75,31 @@ class DashboardScreenState extends State<DashboardScreen> {
               setState(() {
                 selectedDate = newDate;
                 selectedFilter = newFilter;
-
                 DashboardScreen.lastSelectedDate = newDate;
                 DashboardScreen.lastSelectedFilter = newFilter;
               });
               _loadTransactions();
             },
-
           ),
-          _buildBalance(),
+          FutureBuilder(
+            future: _buildBalanceValues(),
+            builder: (context, AsyncSnapshot<List<double>> snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+              }
+              final totalIncome = snapshot.data![0];
+              final totalExpenses = snapshot.data![1];
+              final totalBalance = snapshot.data![2];
+
+              return BalanceSection(
+                totalIncome: totalIncome,
+                totalExpenses: totalExpenses,
+                totalBalance: totalBalance,
+                title: "balance_of".tr(args: [selectedFilter]),
+                mainCurrency: mainCurrency,
+              );
+            },
+          ),
           Expanded(
             child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
                 ? CalendarMonthView(selectedDate: selectedDate)
@@ -102,9 +112,6 @@ class DashboardScreenState extends State<DashboardScreen> {
             )
                 : _buildTransactionList(),
           ),
-
-
-
         ],
       ),
     );
@@ -112,7 +119,6 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadTransactions() async {
     List<Map<String, dynamic>> data = await DatabaseHelper().getTransactions();
-
     setState(() {
       transactions = data.where((t) {
         DateTime transactionDate = DateTime.parse(t['date']);
@@ -127,26 +133,18 @@ class DashboardScreenState extends State<DashboardScreen> {
 
     switch (selectedFilter) {
       case "weekly":
-        startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1)); // Lunes
+        startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
         endDate = startDate.add(const Duration(days: 7));
         break;
-
-
       case "monthly":
-        startDate = DateTime(selectedDate.year, selectedDate.month, 1);
-        endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
-        break;
-
       case "calendar":
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);
         endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
-
       case "annual":
         startDate = DateTime(selectedDate.year, 1, 1);
         endDate = DateTime(selectedDate.year + 1, 1, 1);
         break;
-
       default:
         return false;
     }
@@ -155,23 +153,24 @@ class DashboardScreenState extends State<DashboardScreen> {
         transactionDate.isBefore(endDate);
   }
 
-  Widget _buildBalance() {
-    double totalIncome = transactions
-        .where((t) => t['type'] == 'income')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+  Future<List<double>> _buildBalanceValues() async {
+    double totalIncome = 0;
+    double totalExpenses = 0;
 
-    double totalExpenses = transactions
-        .where((t) => t['type'] == 'expense')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+    for (final t in transactions) {
+      double amount = t['amount'] ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      double converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+      if (t['type'] == 'income') {
+        totalIncome += converted;
+      } else if (t['type'] == 'expense') {
+        totalExpenses += converted;
+      }
+    }
 
     double totalBalance = totalIncome - totalExpenses;
-
-    return BalanceSection(
-      totalIncome: totalIncome,
-      totalExpenses: totalExpenses,
-      totalBalance: totalBalance,
-      title: "balance_of".tr(args: [selectedFilter]),
-    );
+    return [totalIncome, totalExpenses, totalBalance];
   }
 
   Widget _buildTransactionList() {
@@ -179,10 +178,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
     for (var transaction in transactions) {
       String date = (transaction['date'] ?? 'Sin fecha').split(' ')[0];
-      if (!transactionsByDate.containsKey(date)) {
-        transactionsByDate[date] = [];
-      }
-      transactionsByDate[date]!.add(transaction);
+      transactionsByDate.putIfAbsent(date, () => []).add(transaction);
     }
 
     return ListView(
@@ -196,9 +192,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                   accounts: widget.accounts,
                   categories: widget.categories,
                 ),
-                settings: RouteSettings(arguments: {
-                  'date': DateTime.parse(entry.key),
-                }),
+                settings: RouteSettings(arguments: {'date': DateTime.parse(entry.key)}),
               ),
             ).then((_) => _loadTransactions());
           },
@@ -217,28 +211,22 @@ class DashboardScreenState extends State<DashboardScreen> {
                         color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
                       ),
                     ),
-                    Text(
-                      _getBalanceText(entry.value),
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: _getBalanceColor(entry.value),
-                      ),
+                    FutureBuilder<String>(
+                      future: _getBalanceText(entry.value),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? '',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: snapshot.hasData ? _getBalanceColor(entry.value) : Colors.grey,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
               ...entry.value.map((transaction) {
-                String categoryName = _getCategoryName(transaction['category_id']);
-                String accountName = _getAccountName(transaction['account_id']);
-                String linkedAccountName = transaction['linked_account_id'] != null
-                    ? _getAccountName(transaction['linked_account_id'])
-                    : '';
-
-                if (transaction['type'] == 'transfer') {
-                  categoryName = "transfer".tr();
-                  accountName = "$accountName → $linkedAccountName";
-                }
-
                 return TransactionItem(
                   transaction: transaction,
                   accounts: widget.accounts,
@@ -250,50 +238,46 @@ class DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         );
-
       }).toList(),
-
     );
   }
 
-  String _getCategoryName(int? categoryId) {
-    if (categoryId == null) return "unknown".tr();
-    var category = widget.categories.firstWhere(
-            (cat) => cat['id'] == categoryId, orElse: () => {'name': "unknown".tr()});
-    return category['name'];
-  }
+  Future<String> _getBalanceText(List<Map<String, dynamic>> transactions) async {
+    double income = 0;
+    double expense = 0;
 
-  String _getAccountName(int? accountId) {
-    if (accountId == null) return "transfer".tr();
-    var account = widget.accounts.firstWhere(
-            (acc) => acc['id'] == accountId, orElse: () => {'name': 'Desconocida'});
-    return account['name'];
-  }
+    for (final t in transactions) {
+      double amount = t['amount'] ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      double converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
 
-  String _getBalanceText(List<Map<String, dynamic>> transactions) {
-    double income = transactions
-        .where((t) => t['type'] == 'income')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
-
-    double expense = transactions
-        .where((t) => t['type'] == 'expense')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+      if (t['type'] == 'income') {
+        income += converted;
+      } else if (t['type'] == 'expense') {
+        expense += converted;
+      }
+    }
 
     double balance = income - expense;
-
-    return "\$${balance.toStringAsFixed(2)}";
+    final formatter = NumberFormat.currency(locale: 'en_US', symbol: '$mainCurrency ');
+    return formatter.format(balance);
   }
 
   Color _getBalanceColor(List<Map<String, dynamic>> transactions) {
-    double income = transactions
-        .where((t) => t['type'] == 'income')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+    double income = 0;
+    double expense = 0;
 
-    double expense = transactions
-        .where((t) => t['type'] == 'expense')
-        .fold(0.0, (sum, t) => sum + (t['amount'] ?? 0.0));
+    for (final t in transactions) {
+      double amount = t['amount'] ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      // Aquí no ponemos `await` porque el color lo podemos calcular "a ciegas" si falta el cambio.
+      if (t['type'] == 'income') {
+        income += amount;
+      } else if (t['type'] == 'expense') {
+        expense += amount;
+      }
+    }
 
     return (income - expense) >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
   }
-
 }

@@ -2,6 +2,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/account_widgets.dart';
 
@@ -14,12 +16,17 @@ class AccountsScreen extends StatefulWidget {
 
 class AccountsScreenState extends State<AccountsScreen> {
   List<Map<String, dynamic>> accounts = [];
-  String mainCurrency = 'DOP'; // 🔥 Esto se leerá después desde settings.
+  String mainCurrency = 'DOP'; // 🔥 Se actualizará desde Settings.
 
   @override
   void initState() {
     super.initState();
-    _loadAccounts();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    await _loadAccounts();
   }
 
   Future<void> _loadAccounts() async {
@@ -33,12 +40,7 @@ class AccountsScreenState extends State<AccountsScreen> {
   }
 
   Future<double> _convertToMainCurrency(double amount, String currency) async {
-    if (currency == mainCurrency) {
-      return amount;
-    }
-    final db = DatabaseHelper();
-    final rate = await db.getExchangeRate(currency, mainCurrency);
-    return amount * rate;
+    return await ExchangeRateService.localConvert(amount, currency, mainCurrency);
   }
 
   Future<double> _getTotalCapital() async {
@@ -67,15 +69,6 @@ class AccountsScreenState extends State<AccountsScreen> {
     final capital = await _getTotalCapital();
     final debt = await _getTotalDebt();
     return capital - debt;
-  }
-
-  Future<double> _convertAmount(double amount, String currency) async {
-    if (currency == mainCurrency) {
-      return amount;
-    }
-    final db = DatabaseHelper();
-    final rate = await db.getExchangeRate(currency, mainCurrency);
-    return amount * rate;
   }
 
   @override
@@ -107,7 +100,6 @@ class AccountsScreenState extends State<AccountsScreen> {
         ],
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
-
       ),
       body: FutureBuilder(
         future: Future.wait([
@@ -131,6 +123,7 @@ class AccountsScreenState extends State<AccountsScreen> {
                 totalExpenses: totalExpenses,
                 totalBalance: totalBalance,
                 title: "accounts_summary".tr(),
+                mainCurrency: mainCurrency, // 👈 Ahora mostrando la moneda bien.
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -143,16 +136,15 @@ class AccountsScreenState extends State<AccountsScreen> {
                     return FutureBuilder<double>(
                       future: _calculateCategoryTotal(categoryAccounts),
                       builder: (context, snapshot) {
-                        final totalBalance = snapshot.data ?? 0.0;
+                        final categoryBalance = snapshot.data ?? 0.0;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             AccountCategoryHeader(
                               category: category,
-                              totalBalance: totalBalance,
+                              totalBalance: categoryBalance,
                               isHidden: visibleAccounts.isEmpty,
-
                             ),
                             ...categoryAccounts.map((account) {
                               final type = account['type'];
@@ -195,7 +187,7 @@ class AccountsScreenState extends State<AccountsScreen> {
     double total = 0.0;
     for (final account in accounts) {
       if (account['visible'] == 1) {
-        final converted = await _convertAmount(account['balance'], account['currency']);
+        final converted = await _convertToMainCurrency(account['balance'], account['currency']);
         total += account['balance_mode'] == 'credit' ? -converted : converted;
       }
     }

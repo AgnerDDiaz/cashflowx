@@ -2,6 +2,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 import '../widgets/balance_section.dart';
 
 class AccountDetailScreen extends StatefulWidget {
@@ -15,11 +17,19 @@ class AccountDetailScreen extends StatefulWidget {
 
 class _AccountDetailScreenState extends State<AccountDetailScreen> {
   List<Map<String, dynamic>> transactions = [];
+  String mainCurrency = 'DOP';
+  double income = 0;
+  double expense = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    await _loadTransactions();
   }
 
   Future<void> _loadTransactions() async {
@@ -29,22 +39,31 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     t['account_id'] == widget.account['id'] ||
         t['linked_account_id'] == widget.account['id']
     ).toList();
-    setState(() => transactions = filtered);
+
+    double tempIncome = 0;
+    double tempExpense = 0;
+
+    for (final t in filtered) {
+      double amount = t['amount'] ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      double converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+      if (t['type'] == 'income' || (t['type'] == 'transfer' && t['linked_account_id'] == widget.account['id'])) {
+        tempIncome += converted;
+      } else if (t['type'] == 'expense' || (t['type'] == 'transfer' && t['account_id'] == widget.account['id'])) {
+        tempExpense += converted;
+      }
+    }
+
+    setState(() {
+      transactions = filtered;
+      income = tempIncome;
+      expense = tempExpense;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    double income = 0;
-    double expense = 0;
-
-    for (final t in transactions) {
-      if (t['type'] == 'income' || (t['type'] == 'transfer' && t['linked_account_id'] == widget.account['id'])) {
-        income += t['amount'];
-      } else if (t['type'] == 'expense' || (t['type'] == 'transfer' && t['account_id'] == widget.account['id'])) {
-        expense += t['amount'];
-      }
-    }
-
     double balance = income - expense;
 
     return Scaffold(
@@ -62,6 +81,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
             totalExpenses: expense,
             totalBalance: balance,
             title: "account_summary".tr(),
+            mainCurrency: mainCurrency,
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -85,7 +105,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     trailing: Text(
-                      (isIncome ? '+ ' : '- ') + t['amount'].toStringAsFixed(2),
+                      (isIncome ? '+ ' : '- ') + (t['amount'] ?? 0.0).toStringAsFixed(2),
                       style: TextStyle(
                         color: amountColor,
                         fontWeight: FontWeight.bold,
