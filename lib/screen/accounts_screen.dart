@@ -1,11 +1,8 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
-import '../utils/exchange_rate_service.dart';
-import '../utils/settings_helper.dart';
-import '../widgets/balance_section.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/balance_section.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
@@ -15,182 +12,102 @@ class AccountsScreen extends StatefulWidget {
 }
 
 class AccountsScreenState extends State<AccountsScreen> {
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> accounts = [];
-  String mainCurrency = 'DOP'; // 🔥 Se actualizará desde Settings.
+  Map<String, double> categoryTotals = {};
+
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
-  }
-
-  Future<void> _loadInitialData() async {
-    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
-    await _loadAccounts();
+    _loadAccounts();
   }
 
   Future<void> _loadAccounts() async {
-    final db = DatabaseHelper();
-    List<Map<String, dynamic>> result = await db.getAccounts();
-    setState(() => accounts = result);
+    final accs = await _dbHelper.getAccounts();
+    setState(() {
+      accounts = accs;
+      _calculateCategoryTotals();
+    });
   }
 
-  void reloadAccounts() async {
-    await _loadAccounts();
+  void reloadAccounts() {
+    _loadAccounts();
   }
 
-  Future<double> _convertToMainCurrency(double amount, String currency) async {
-    return await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+  void _calculateCategoryTotals() {
+    final Map<String, double> totals = {};
+
+    for (var account in accounts) {
+      final String category = account['category'] ?? 'Otros';
+      final double balance = account['balance'] ?? 0.0;
+      totals[category] = (totals[category] ?? 0.0) + balance;
+    }
+
+    setState(() {
+      categoryTotals = totals;
+    });
   }
 
-  Future<double> _getTotalCapital() async {
+  double _calculateTotalBalance() {
     double total = 0.0;
-    for (final account in accounts) {
-      if (account['include_in_balance'] == 1 && account['balance_mode'] != 'credit') {
-        final convertedBalance = await _convertToMainCurrency(account['balance'], account['currency']);
-        total += convertedBalance;
-      }
+    for (var account in accounts) {
+      total += account['balance'] ?? 0.0;
     }
     return total;
-  }
-
-  Future<double> _getTotalDebt() async {
-    double total = 0.0;
-    for (final account in accounts) {
-      if (account['include_in_balance'] == 1 && account['balance_mode'] == 'credit') {
-        final convertedBalance = await _convertToMainCurrency(account['balance'], account['currency']);
-        total += convertedBalance;
-      }
-    }
-    return total;
-  }
-
-  Future<double> _getTotalBalance() async {
-    final capital = await _getTotalCapital();
-    final debt = await _getTotalDebt();
-    return capital - debt;
   }
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, List<Map<String, dynamic>>> categoryMap = {};
-    for (final account in accounts) {
-      final category = account['category'] ?? "no_category".tr();
-      if (!categoryMap.containsKey(category)) {
-        categoryMap[category] = [];
-      }
-      categoryMap[category]!.add(account);
-    }
+    final mainCurrency = accounts.isNotEmpty ? accounts.first['currency'] : 'DOP';
+    final totalIncome = accounts.where((a) => a['balance'] != null && a['balance'] >= 0).fold(0.0, (sum, a) => sum + (a['balance'] as double));
+    final totalExpenses = accounts.where((a) => a['balance'] != null && a['balance'] < 0).fold(0.0, (sum, a) => sum + (a['balance'] as double));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'accounts'.tr(),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {},
-          ),
-        ],
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
+        title: Text('Cuentas', style: Theme.of(context).textTheme.titleLarge),
       ),
-      body: FutureBuilder(
-        future: Future.wait([
-          _getTotalCapital(),
-          _getTotalDebt(),
-          _getTotalBalance(),
-        ]),
-        builder: (context, AsyncSnapshot<List<double>> snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: RefreshIndicator(
+        onRefresh: _loadAccounts,
+        child: ListView(
+          children: [
+            BalanceSection(
+              totalIncome: totalIncome,
+              totalExpenses: totalExpenses,
+              totalBalance: _calculateTotalBalance(),
+              mainCurrency: mainCurrency,
+            ),
+            const SizedBox(height: 10),
+            ...categoryTotals.keys.map((category) {
+              final catAccounts = accounts.where((a) => a['category'] == category).toList();
+              final catTotal = categoryTotals[category] ?? 0.0;
 
-          final totalIncome = snapshot.data![0];
-          final totalExpenses = snapshot.data![1];
-          final totalBalance = snapshot.data![2];
-
-          return Column(
-            children: [
-              BalanceSection(
-                totalIncome: totalIncome,
-                totalExpenses: totalExpenses,
-                totalBalance: totalBalance,
-                title: "accounts_summary".tr(),
-                mainCurrency: mainCurrency, // 👈 Ahora mostrando la moneda bien.
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView(
-                  children: categoryMap.entries.map((entry) {
-                    final category = entry.key;
-                    final categoryAccounts = entry.value;
-                    final visibleAccounts = categoryAccounts.where((acc) => acc['visible'] == 1).toList();
-
-                    return FutureBuilder<double>(
-                      future: _calculateCategoryTotal(categoryAccounts),
-                      builder: (context, snapshot) {
-                        final categoryBalance = snapshot.data ?? 0.0;
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AccountCategoryHeader(
-                              category: category,
-                              totalBalance: categoryBalance,
-                              isHidden: visibleAccounts.isEmpty,
-                            ),
-                            ...categoryAccounts.map((account) {
-                              final type = account['type'];
-
-                              if (type == 'credit') {
-                                return CreditCardTile(
-                                  name: account['name'],
-                                  dueAmount: account['balance'],
-                                  remainingCredit: (account['max_credit'] ?? 0) - (account['balance'] ?? 0),
-                                  currency: account['currency'],
-                                  visible: account['visible'] == 1,
-                                  onTap: () {},
-                                );
-                              } else {
-                                return AccountTile(
-                                  name: account['name'],
-                                  balance: account['balance'],
-                                  currency: account['currency'],
-                                  visible: account['visible'] == 1,
-                                  onTap: () {},
-                                );
-                              }
-                            }).toList(),
-                            const SizedBox(height: 12),
-                          ],
-                        );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AccountCategoryHeader(
+                    category: category,
+                    totalBalance: catTotal,
+                  ),
+                  ...catAccounts.map((account) {
+                    return AccountTile(
+                      name: account['name'],
+                      balance: account['balance'],
+                      currency: account['currency'],
+                      visible: account['visible'] == 1,
+                      onTap: () {
+                        // Aquí puedes navegar a la pantalla de detalle de la cuenta
                       },
                     );
                   }).toList(),
-                ),
-              ),
-            ],
-          );
-        },
+                  const SizedBox(height: 12),
+                ],
+              );
+            }),
+          ],
+        ),
       ),
     );
-  }
-
-  Future<double> _calculateCategoryTotal(List<Map<String, dynamic>> accounts) async {
-    double total = 0.0;
-    for (final account in accounts) {
-      if (account['visible'] == 1) {
-        final converted = await _convertToMainCurrency(account['balance'], account['currency']);
-        total += account['balance_mode'] == 'credit' ? -converted : converted;
-      }
-    }
-    return total;
   }
 }
