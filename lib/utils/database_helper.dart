@@ -535,7 +535,7 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> addTransaction(Map<String, dynamic> transaction) async {
+  Future<int> addTransaction(Map<String, dynamic> transaction) async {
     final db = await database;
 
     final account = await db.query('accounts', where: 'id = ?', whereArgs: [transaction['account_id']]);
@@ -550,14 +550,9 @@ class DatabaseHelper {
       amount = await ExchangeRateService.localConvert(amount, transactionCurrency, accountCurrency);
     }
 
-    // Insertar la transacción
     final transactionId = await db.insert('transactions', transaction);
 
-    // Actualizar el balance
-    double newBalance = (accountData['balance'] as double) + (transaction['type'] == 'expense' ? -amount : amount);
-
     if (transaction['type'] == 'transfer' && transaction['linked_account_id'] != null) {
-      // Si es transferencia, también mover dinero a la cuenta destino
       final linkedAccount = await db.query('accounts', where: 'id = ?', whereArgs: [transaction['linked_account_id']]);
       if (linkedAccount.isEmpty) throw Exception('Linked account not found');
 
@@ -569,14 +564,98 @@ class DatabaseHelper {
         linkedAmount = await ExchangeRateService.localConvert(linkedAmount, transactionCurrency, linkedAccountCurrency);
       }
 
-      double linkedNewBalance = (linkedAccountData['balance'] as double) + linkedAmount;
+      // ❌ Restar en origen
+      await db.update('accounts', {
+        'balance': (accountData['balance'] as double) - amount,
+      }, where: 'id = ?', whereArgs: [transaction['account_id']]);
 
-      await db.update('accounts', {'balance': linkedNewBalance}, where: 'id = ?', whereArgs: [transaction['linked_account_id']]);
+      // ✅ Sumar en destino
+      await db.update('accounts', {
+        'balance': (linkedAccountData['balance'] as double) + linkedAmount,
+      }, where: 'id = ?', whereArgs: [transaction['linked_account_id']]);
+    } else {
+      double newBalance = (accountData['balance'] as double) + (transaction['type'] == 'expense' ? -amount : amount);
+      await db.update('accounts', {'balance': newBalance}, where: 'id = ?', whereArgs: [transaction['account_id']]);
     }
 
-    await db.update('accounts', {'balance': newBalance}, where: 'id = ?', whereArgs: [transaction['account_id']]);
+    return transactionId;
   }
 
+  Future<int> updateTransaction(int id, Map<String, dynamic> newTransaction) async {
+    final db = await database;
+
+    final oldTransactionList = await db.query('transactions', where: 'id = ?', whereArgs: [id]);
+    if (oldTransactionList.isEmpty) throw Exception('Transaction not found');
+
+    final oldTransaction = oldTransactionList.first;
+
+    // Validar cambios
+    bool changed = false;
+    for (var key in ['account_id', 'linked_account_id', 'amount', 'currency', 'type']) {
+      if (oldTransaction[key] != newTransaction[key]) {
+        changed = true;
+        break;
+      }
+    }
+
+    if (!changed) {
+      // Si no cambió nada relevante, no hacemos nada
+      return 0;
+    }
+
+    await deleteTransaction(id);
+    await addTransaction(newTransaction);
+
+    return 1;
+  }
+
+  Future<void> deleteTransaction(int id) async {
+    final db = await database;
+
+    final transactionList = await db.query('transactions', where: 'id = ?', whereArgs: [id]);
+    if (transactionList.isEmpty) throw Exception('Transaction not found');
+
+    final transaction = transactionList.first;
+    final account = await db.query('accounts', where: 'id = ?', whereArgs: [transaction['account_id']]);
+    if (account.isEmpty) throw Exception('Account not found');
+
+    final accountData = account.first;
+    final accountCurrency = accountData['currency'] as String;
+    final transactionCurrency = transaction['currency'] as String;
+    double amount = transaction['amount'] as double;
+
+    if (accountCurrency != transactionCurrency) {
+      amount = await ExchangeRateService.localConvert(amount, transactionCurrency, accountCurrency);
+    }
+
+    if (transaction['type'] == 'transfer' && transaction['linked_account_id'] != null) {
+      final linkedAccount = await db.query('accounts', where: 'id = ?', whereArgs: [transaction['linked_account_id']]);
+      if (linkedAccount.isEmpty) throw Exception('Linked account not found');
+
+      final linkedAccountData = linkedAccount.first;
+      final linkedAccountCurrency = linkedAccountData['currency'] as String;
+
+      double linkedAmount = transaction['amount'] as double;
+      if (linkedAccountCurrency != transactionCurrency) {
+        linkedAmount = await ExchangeRateService.localConvert(linkedAmount, transactionCurrency, linkedAccountCurrency);
+      }
+
+      // ✅ Revertir en origen (sumar)
+      await db.update('accounts', {
+        'balance': (accountData['balance'] as double) + amount,
+      }, where: 'id = ?', whereArgs: [transaction['account_id']]);
+
+      // ❌ Revertir en destino (restar)
+      await db.update('accounts', {
+        'balance': (linkedAccountData['balance'] as double) - linkedAmount,
+      }, where: 'id = ?', whereArgs: [transaction['linked_account_id']]);
+    } else {
+      double newBalance = (accountData['balance'] as double) + (transaction['type'] == 'expense' ? amount : -amount);
+      await db.update('accounts', {'balance': newBalance}, where: 'id = ?', whereArgs: [transaction['account_id']]);
+    }
+
+    await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
 
 
 
@@ -621,82 +700,6 @@ class DatabaseHelper {
 
     return currencies;
   }
-
-
-
-  Future<void> updateTransaction(int id, Map<String, dynamic> newTransaction) async {
-    final db = await database;
-
-    final oldTransaction = await db.query('transactions', where: 'id = ?', whereArgs: [id]);
-    if (oldTransaction.isEmpty) throw Exception('Transaction not found');
-
-    final oldData = oldTransaction.first;
-
-    // Revertir efecto de la transacción vieja
-    final oldAccount = await db.query('accounts', where: 'id = ?', whereArgs: [oldData['account_id']]);
-    if (oldAccount.isEmpty) throw Exception('Old account not found');
-
-    final oldAccountData = oldAccount.first;
-    final oldAccountCurrency = oldAccountData['currency'] as String;
-    final oldTransactionCurrency = oldData['currency'] as String;
-    double oldAmount = oldData['amount'] as double;
-
-    if (oldAccountCurrency != oldTransactionCurrency) {
-      oldAmount = await ExchangeRateService.localConvert(oldAmount, oldTransactionCurrency, oldAccountCurrency);
-    }
-
-    double revertBalance = (oldAccountData['balance'] as double) + (oldData['type'] == 'expense' ? oldAmount : -oldAmount);
-
-    await db.update('accounts', {'balance': revertBalance}, where: 'id = ?', whereArgs: [oldData['account_id']]);
-
-    // Insertar la nueva transacción
-    await db.update('transactions', newTransaction, where: 'id = ?', whereArgs: [id]);
-
-    // Aplicar efecto de la nueva transacción
-    final newAccount = await db.query('accounts', where: 'id = ?', whereArgs: [newTransaction['account_id']]);
-    final newAccountData = newAccount.first;
-    final newAccountCurrency = newAccountData['currency'] as String;
-    final newTransactionCurrency = newTransaction['currency'] as String;
-    double newAmount = newTransaction['amount'] as double;
-
-    if (newAccountCurrency != newTransactionCurrency) {
-      newAmount = await ExchangeRateService.localConvert(newAmount, newTransactionCurrency, newAccountCurrency);
-    }
-
-    double applyNewBalance = (newAccountData['balance'] as double) + (newTransaction['type'] == 'expense' ? -newAmount : newAmount);
-
-    await db.update('accounts', {'balance': applyNewBalance}, where: 'id = ?', whereArgs: [newTransaction['account_id']]);
-  }
-
-
-
-
-  Future<void> deleteTransaction(int id) async {
-    final db = await database;
-
-    final transaction = await db.query('transactions', where: 'id = ?', whereArgs: [id]);
-    if (transaction.isEmpty) throw Exception('Transaction not found');
-
-    final transactionData = transaction.first;
-
-    final account = await db.query('accounts', where: 'id = ?', whereArgs: [transactionData['account_id']]);
-    if (account.isEmpty) throw Exception('Account not found');
-
-    final accountData = account.first;
-    final accountCurrency = accountData['currency'] as String;
-    final transactionCurrency = transactionData['currency'] as String;
-    double amount = transactionData['amount'] as double;
-
-    if (accountCurrency != transactionCurrency) {
-      amount = await ExchangeRateService.localConvert(amount, transactionCurrency, accountCurrency);
-    }
-
-    double newBalance = (accountData['balance'] as double) + (transactionData['type'] == 'expense' ? amount : -amount);
-
-    await db.update('accounts', {'balance': newBalance}, where: 'id = ?', whereArgs: [transactionData['account_id']]);
-    await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
-  }
-
 
 
   Future<int> addCategory(Map<String, dynamic> category) async {

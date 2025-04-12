@@ -10,12 +10,14 @@ class AccountCategoryHeader extends StatelessWidget {
   final String category;
   final double totalBalance;
   final bool isHidden;
+  final String mainCurrency;
 
   const AccountCategoryHeader({
     Key? key,
     required this.category,
     required this.totalBalance,
-    this.isHidden = false,
+    required this.isHidden,
+    required this.mainCurrency,
   }) : super(key: key);
 
   @override
@@ -23,48 +25,42 @@ class AccountCategoryHeader extends StatelessWidget {
     final color = totalBalance >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
     final textColor = isHidden ? Theme.of(context).disabledColor : color;
 
-    return FutureBuilder<String>(
-      future: SettingsHelper().getMainCurrency(),
-      builder: (context, snapshot) {
-        final mainCurrency = snapshot.data ?? 'DOP';
-        final formatter = NumberFormat.currency(locale: 'en_US', symbol: mainCurrency);
+    final formatter = NumberFormat.currency(locale: 'en_US', symbol: mainCurrency); // 🔥 Aquí ya usamos el parámetro
 
-        return Container(
-          color: Theme.of(context).cardColor,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      category,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      formatter.format(totalBalance),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
+    return Container(
+      color: Theme.of(context).cardColor,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  category,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-              Divider(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                height: 6,
-                thickness: 6,
-              ),
-            ],
+                Text(
+                  formatter.format(totalBalance),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+          Divider(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            height: 6,
+            thickness: 6,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -138,6 +134,7 @@ class CreditCardTile extends StatelessWidget {
     this.onTap,
     this.visible = true,
   }) : super(key: key);
+
 
   @override
   Widget build(BuildContext context) {

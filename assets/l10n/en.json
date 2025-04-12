@@ -59,7 +59,8 @@
   "select_currency": "Select currency",
   "confirm_add_currency": "Confirm add currency?",
   "error_no_internet": "Could not connect. Add rate manually?",
-  "enter_exchange_rate": "Enter the exchange rate"
+  "enter_exchange_rate": "Enter the exchange rate",
+  "currency": "Currency"
 
 }
 
