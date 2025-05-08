@@ -5,6 +5,7 @@ import '../utils/settings_helper.dart';
 import '../utils/exchange_rate_service.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/balance_section.dart';
+import 'account_detail_screen.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
@@ -15,6 +16,7 @@ class AccountsScreen extends StatefulWidget {
 
 class AccountsScreenState extends State<AccountsScreen> {
   List<Map<String, dynamic>> accounts = [];
+  List<Map<String, dynamic>> categories = [];
   String mainCurrency = 'DOP';
 
   @override
@@ -30,9 +32,15 @@ class AccountsScreenState extends State<AccountsScreen> {
 
   Future<void> _loadAccounts() async {
     final db = DatabaseHelper();
-    List<Map<String, dynamic>> result = await db.getAccounts();
-    setState(() => accounts = result);
+    final loadedAccounts = await db.getAccounts();
+    final loadedCategories = await db.getCategories();
+
+    setState(() {
+      accounts = loadedAccounts;
+      categories = loadedCategories;
+    });
   }
+
 
   void reloadAccounts() {
     _loadAccounts();
@@ -162,7 +170,22 @@ class AccountsScreenState extends State<AccountsScreen> {
                             remainingCredit: (account['max_credit'] ?? 0) - (account['balance'] ?? 0),
                             currency: account['currency'],
                             visible: account['visible'] == 1,
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AccountDetailScreen(
+                                    accountId: account['id'],
+                                    accountName: account['name'],
+                                    accountCurrency: account['currency'],
+                                    accounts: accounts,
+                                    categories: categories,
+                                  )
+
+                                ),
+                              );
+
+                            },
                           );
                         } else {
                           return AccountTile(
@@ -170,7 +193,23 @@ class AccountsScreenState extends State<AccountsScreen> {
                             balance: account['balance'],
                             currency: account['currency'],
                             visible: account['visible'] == 1,
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AccountDetailScreen(
+                                    accountId: account['id'],
+                                    accountName: account['name'],
+                                    accountCurrency: account['currency'],
+                                    accounts: accounts,
+                                    categories: categories,
+                                  )
+
+                                ),
+                              );
+
+                            },
+
                           );
                         }
                       }).toList(),

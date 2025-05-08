@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:easy_localization/easy_localization.dart';
 import '../utils/database_helper.dart';
 import '../utils/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
+import '../widgets/annual_summary_view.dart';
+import '../widgets/balance_section.dart';
+import '../widgets/calendar_month_view.dart';
+import '../widgets/transaction_item.dart';
+import '../widgets/date_selector.dart';
 
 class AccountDetailScreen extends StatefulWidget {
   final int accountId;
   final String accountName;
   final String accountCurrency;
+  final List<Map<String, dynamic>> accounts;
+  final List<Map<String, dynamic>> categories;
 
   const AccountDetailScreen({
     Key? key,
     required this.accountId,
     required this.accountName,
     required this.accountCurrency,
+    required this.accounts,
+    required this.categories,
   }) : super(key: key);
 
   @override
@@ -22,140 +30,212 @@ class AccountDetailScreen extends StatefulWidget {
 }
 
 class _AccountDetailScreenState extends State<AccountDetailScreen> {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
-  final ExchangeRateService _exchangeRateService = ExchangeRateService();
-
   List<Map<String, dynamic>> transactions = [];
-  double totalIncome = 0.0;
-  double totalExpense = 0.0;
-  String mainCurrency = 'DOP';
+  double income = 0.0;
+  double expenses = 0.0;
+  String mainCurrency = 'USD';
+  String selectedFilter = 'monthly';
+  DateTime selectedDate = DateTime.now();
+
+  List<Map<String, dynamic>> accounts = [];
+  List<Map<String, dynamic>> categories = [];
 
   @override
   void initState() {
     super.initState();
+    _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      if (args.containsKey('date')) {
+        selectedDate = args['date'];
+      }
+      if (args.containsKey('filter')) {
+        selectedFilter = args['filter'];
+      }
+    }
     _loadTransactions();
   }
 
+
+  Future<void> _loadData() async {
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'USD';
+    final db = DatabaseHelper();
+    accounts = await db.getAccounts();
+    categories = await db.getCategories();
+    await _loadTransactions();
+  }
+
   Future<void> _loadTransactions() async {
-    final dbTransactions = await _dbHelper.getTransactionsByAccount(widget.accountId);
-    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    final db = DatabaseHelper();
+    final result = await db.getTransactionsByAccount(widget.accountId);
 
-    double income = 0.0;
-    double expense = 0.0;
+    double totalIncome = 0.0;
+    double totalExpenses = 0.0;
 
-    List<Map<String, dynamic>> enrichedTransactions = [];
+    final filtered = result.where((tx) {
+      DateTime date = DateTime.parse(tx['date']);
+      DateTime start;
+      DateTime end;
 
-    for (var t in dbTransactions) {
-      final amount = t['amount'] ?? 0.0;
-      final type = t['type'] ?? 'expense';
-      final currency = t['currency'] ?? 'DOP';
-
-      final convertedAmount = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
-
-      if (type == 'income') {
-        income += convertedAmount;
-      } else if (type == 'expense') {
-        expense += convertedAmount;
-      } else if (type == 'transfer') {
-        // Tratamiento especial de transferencias si quieres separarlas
+      switch (selectedFilter) {
+        case 'weekly':
+          start = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
+          end = start.add(const Duration(days: 6));
+          break;
+        case 'monthly':
+        case 'calendar':
+          start = DateTime(selectedDate.year, selectedDate.month, 1);
+          end = DateTime(selectedDate.year, selectedDate.month + 1, 1);
+          break;
+        case 'annual':
+          start = DateTime(selectedDate.year, 1, 1);
+          end = DateTime(selectedDate.year + 1, 1, 1);
+          break;
+        default:
+          return true;
       }
 
-      enrichedTransactions.add({
-        ...t,
-        'converted_amount': convertedAmount,
-      });
+      return date.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          date.isBefore(end);
+    }).toList();
+
+
+    List<Map<String, dynamic>> adjusted = [];
+
+    for (var tx in filtered) {
+      double amount = (tx['amount'] as num).toDouble();
+      double convertedAmount = await ExchangeRateService.localConvert(
+        amount,
+        tx['currency'],
+        mainCurrency,
+      );
+
+      // Lógica especial para transferencias
+      if (tx['type'] == 'transfer') {
+        if (tx['account_id'] == widget.accountId) {
+          totalExpenses += convertedAmount;
+          convertedAmount = -convertedAmount;
+        } else if (tx['linked_account_id'] == widget.accountId) {
+          totalIncome += convertedAmount;
+        }
+      } else if (tx['type'] == 'income') {
+        totalIncome += convertedAmount;
+      } else if (tx['type'] == 'expense') {
+        totalExpenses += convertedAmount;
+        convertedAmount = -convertedAmount;
+      }
+
+      adjusted.add({...tx, 'convertedAmount': convertedAmount});
     }
 
     setState(() {
-      transactions = enrichedTransactions;
-      totalIncome = income;
-      totalExpense = expense;
+      transactions = adjusted;
+      income = totalIncome;
+      expenses = totalExpenses;
     });
+  }
+
+  Widget _buildTransactionList() {
+    Map<String, List<Map<String, dynamic>>> grouped = {};
+
+    for (var t in transactions) {
+      final dateKey = (t['date'] ?? '').split(' ')[0];
+      if (!grouped.containsKey(dateKey)) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey]!.add(t);
+    }
+
+    if (transactions.isEmpty) {
+      return const Center(child: Text('No hay transacciones.'));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(8.0),
+      children: grouped.entries.map((entry) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Text(
+                DateFormat('d MMM yyyy').format(DateTime.parse(entry.key)),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+                ),
+              ),
+            ),
+            ...entry.value.map((tx) {
+              return TransactionItem(
+                transaction: tx,
+                accounts: accounts,
+                categories: categories,
+                onTransactionUpdated: _loadTransactions,
+              );
+            }).toList(),
+          ],
+        );
+      }).toList(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final totalBalance = totalIncome - totalExpense;
+    double totalBalance = income + expenses;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.accountName, style: Theme.of(context).textTheme.titleLarge),
+        title: Text(widget.accountName),
       ),
       body: Column(
         children: [
+          DateSelector(
+            initialDate: selectedDate,
+            initialFilter: selectedFilter,
+            onDateChanged: (newDate, newFilter) {
+              setState(() {
+                selectedDate = newDate;
+                selectedFilter = newFilter;
+              });
+              _loadTransactions();
+            },
+          ),
           const SizedBox(height: 10),
-          _buildSummarySection(totalBalance),
+          BalanceSection(
+            totalIncome: income,
+            totalExpenses: expenses,
+            totalBalance: totalBalance,
+            title: 'Resumen de Cuenta',
+            mainCurrency: mainCurrency,
+          ),
           const SizedBox(height: 10),
           Expanded(
-            child: ListView.builder(
-              itemCount: transactions.length,
-              itemBuilder: (context, index) {
-                final t = transactions[index];
-                final isIncome = t['type'] == 'income';
-                final isExpense = t['type'] == 'expense';
-                final isTransfer = t['type'] == 'transfer';
-                final amount = t['converted_amount'] ?? 0.0;
-
-                return ListTile(
-                  title: Text(t['note'] ?? 'No description'),
-                  subtitle: Text(DateFormat('d MMM y').format(DateTime.parse(t['date']))),
-                  trailing: Text(
-                    (isIncome ? '+ ' : isExpense ? '- ' : '') +
-                        '${amount.toStringAsFixed(2)} $mainCurrency',
-                    style: TextStyle(
-                      color: isIncome
-                          ? Colors.green
-                          : isExpense
-                          ? Colors.red
-                          : Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
+                ? CalendarMonthView(
+                selectedDate: selectedDate,
+                accounts: widget.accounts,
+                categories: widget.categories,
+                transactions: transactions,
+                accountId: widget.accountId,
+                accountName: widget.accountName,
+                )
+                : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
+                ? AnnualSummaryView(
+              selectedDate: selectedDate,
+              accounts: widget.accounts,
+              categories: widget.categories,
+              transactions: transactions,
+            )
+                : _buildTransactionList(),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSummarySection(double totalBalance) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildSummaryItem('income'.tr(), totalIncome, Colors.green),
-            _buildSummaryItem('expenses'.tr(), totalExpense, Colors.red),
-            _buildSummaryItem('balance'.tr(), totalBalance,
-                totalBalance >= 0 ? Colors.green : Colors.red),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem(String label, double amount, Color color) {
-    return Column(
-      children: [
-        Text(label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).hintColor,
-            )),
-        const SizedBox(height: 4),
-        Text(
-          '${amount.toStringAsFixed(2)} $mainCurrency',
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      ],
     );
   }
 }

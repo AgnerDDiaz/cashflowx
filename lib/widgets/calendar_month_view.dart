@@ -1,13 +1,29 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../screen/account_detail_screen.dart';
+import '../screen/dashboard_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
 
 class CalendarMonthView extends StatefulWidget {
   final DateTime selectedDate;
+  final int? accountId;
+  final String? accountName;
+  final List<Map<String, dynamic>> accounts;
+  final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> transactions;
 
-  const CalendarMonthView({Key? key, required this.selectedDate}) : super(key: key);
+  const CalendarMonthView({
+    Key? key,
+    required this.selectedDate,
+    this.accountId,
+    this.accountName,
+    this.accounts = const [],
+    this.categories = const [],
+    this.transactions = const [],
+  }) : super(key: key);
+
 
   @override
   State<CalendarMonthView> createState() => _CalendarMonthViewState();
@@ -32,7 +48,10 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
 
   Future<void> _loadMonthlyData() async {
     final db = DatabaseHelper();
-    final allTransactions = await db.getTransactions();
+    final allTransactions = widget.accountId != null
+        ? await DatabaseHelper().getTransactionsByAccount(widget.accountId!)
+        : await DatabaseHelper().getTransactions();
+
 
     final start = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
     final end = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0);
@@ -77,8 +96,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
       ));
     }
 
-    return Expanded(
-      child: Column(
+    return Column(
         children: [
           const SizedBox(height: 4),
           Row(
@@ -94,9 +112,13 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
           const SizedBox(height: 4),
           ...rows,
         ],
-      ),
-    );
+      );
   }
+  String _getAccountName(int accountId) {
+    // Aquí puedes usar una función similar a lo que haces en TransactionItem
+    return "Cuenta";
+  }
+
 
   Widget _buildDayCell(int index, int firstWeekday, int totalDaysInMonth, int daysInPrevMonth) {
     int dayNum = index - firstWeekday + 1;
@@ -130,15 +152,39 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
       child: InkWell(
         onTap: () {
           final monday = date.subtract(Duration(days: date.weekday - 1));
-          Navigator.pushReplacementNamed(
+
+          if (widget.accountId != null) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AccountDetailScreen(
+                  accountId: widget.accountId!,
+                  accountName: widget.accountName ?? 'Cuenta',
+                  accountCurrency: 'DOP',
+                  accounts: [],
+                  categories: [],
+                ),
+                settings: RouteSettings(arguments: {
+                  'filter': 'weekly',
+                  'date': monday,
+                }),
+              ),
+            );
+          } else {
+            // Estamos en Dashboard, solo actualiza el filtro global y redibuja
+            DashboardScreen.lastSelectedDate = monday;
+            DashboardScreen.lastSelectedFilter = 'weekly';
+            Navigator.push(
             context,
-            '/',
-            arguments: {
-              'filter': 'Semanal',
-              'date': monday,
-            },
-          );
+              MaterialPageRoute(builder: (_) => const DashboardScreen(
+                accounts: [],
+                transactions: [],
+                categories: [],
+              )),
+            );
+          }
         },
+
         borderRadius: BorderRadius.circular(4),
         splashColor: Colors.black12,
         child: Container(

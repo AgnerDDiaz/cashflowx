@@ -20,11 +20,11 @@ class DashboardScreen extends StatefulWidget {
   static String lastSelectedFilter = "monthly";
 
   const DashboardScreen({
-    Key? key,
-    required this.accounts,
-    required this.transactions,
-    required this.categories,
-  }) : super(key: key);
+    super.key,
+    this.accounts = const [],
+    this.categories = const [],
+    this.transactions = const [],
+  });
 
   @override
   DashboardScreenState createState() => DashboardScreenState();
@@ -42,7 +42,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> accounts = [];
   List<Map<String, dynamic>> categories = [];
 
-  String mainCurrency = 'DOP'; // 👈 Para conversión
+  String mainCurrency = 'DOP';
 
   @override
   void initState() {
@@ -54,6 +54,9 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadInitialData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    final db = DatabaseHelper();
+    accounts = await db.getAccounts();
+    categories = await db.getCategories();
     await _loadTransactions();
   }
 
@@ -102,7 +105,12 @@ class DashboardScreenState extends State<DashboardScreen> {
           ),
           Expanded(
             child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
-                ? CalendarMonthView(selectedDate: selectedDate)
+                ? CalendarMonthView(
+              selectedDate: selectedDate,
+              accounts: accounts,
+              categories: categories,
+              transactions: transactions,
+            )
                 : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
                 ? AnnualSummaryView(
               selectedDate: selectedDate,
@@ -118,7 +126,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadTransactions() async {
-    List<Map<String, dynamic>> data = await DatabaseHelper().getTransactions();
+    final data = await DatabaseHelper().getTransactions();
     setState(() {
       transactions = data.where((t) {
         DateTime transactionDate = DateTime.parse(t['date']);
@@ -189,8 +197,8 @@ class DashboardScreenState extends State<DashboardScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => AddTransactionScreen(
-                  accounts: widget.accounts,
-                  categories: widget.categories,
+                  accounts: accounts,
+                  categories: categories,
                 ),
                 settings: RouteSettings(arguments: {'date': DateTime.parse(entry.key)}),
               ),
@@ -229,8 +237,8 @@ class DashboardScreenState extends State<DashboardScreen> {
               ...entry.value.map((transaction) {
                 return TransactionItem(
                   transaction: transaction,
-                  accounts: widget.accounts,
-                  categories: widget.categories,
+                  accounts: accounts,
+                  categories: categories,
                   onTransactionUpdated: _loadTransactions,
                 );
               }).toList(),
@@ -270,7 +278,6 @@ class DashboardScreenState extends State<DashboardScreen> {
     for (final t in transactions) {
       double amount = t['amount'] ?? 0.0;
       String currency = t['currency'] ?? mainCurrency;
-      // Aquí no ponemos `await` porque el color lo podemos calcular "a ciegas" si falta el cambio.
       if (t['type'] == 'income') {
         income += amount;
       } else if (t['type'] == 'expense') {
