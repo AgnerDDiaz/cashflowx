@@ -153,8 +153,17 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
       if (t['type'] == 'income') {
         income += converted;
-      } else if (t['type'] == 'expense' || t['type'] == 'transfer') {
+      } else if (t['type'] == 'expense') {
         expense += converted;
+      } else if (t['type'] == 'transfer') {
+        // Si es cuenta que envió dinero, es gasto
+        if (t['account_id'] == widget.accountId) {
+          expense += converted;
+        }
+        // Si es cuenta que recibió, es ingreso
+        else if (t['linked_account_id'] == widget.accountId) {
+          income += converted;
+        }
       }
     }
 
@@ -162,6 +171,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     final formatter = NumberFormat.currency(locale: 'en_US', symbol: '$mainCurrency ');
     return formatter.format(balance);
   }
+
 
   Widget _buildTransactionList() {
     Map<String, List<Map<String, dynamic>>> grouped = {};
@@ -235,6 +245,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                 accounts: accounts,
                 categories: categories,
                 onTransactionUpdated: _loadTransactions,
+                currentAccountId: widget.accountId, // NUEVO
               );
             }).toList(),
           ],
@@ -286,70 +297,85 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.accountName),
-      ),
-      body: Column(
-        children: [
-          DateSelector(
-            initialDate: selectedDate,
-            initialFilter: selectedFilter,
-            onDateChanged: (newDate, newFilter) {
-              setState(() {
-                selectedDate = newDate;
-                selectedFilter = newFilter;
-              });
-              _loadTransactions();
-            },
-          ),
-          const SizedBox(height: 10),
-          BalanceSection(
-            totalIncome: income,
-            totalExpenses: expenses,
-            totalBalance: totalBalance,
-            title: 'Resumen de Cuenta',
-            mainCurrency: mainCurrency,
-          ),
-          const SizedBox(height: 10),
-          Expanded(child: contentView,),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AddTransactionScreen(
-                accounts: accounts,
-                categories: categories,
-              ),
-              settings: RouteSettings(arguments: {
-                'account_id': widget.accountId,
-                'account_currency': widget.accountCurrency,
-              }),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, true); // Devuelve true al cerrar
+        return false; // Previene pop automático
+      },
+      child:Scaffold(
+        appBar: AppBar(
+          title: Text(widget.accountName),
+        ),
+        body: Column(
+          children: [
+            DateSelector(
+              initialDate: selectedDate,
+              initialFilter: selectedFilter,
+              onDateChanged: (newDate, newFilter) {
+                setState(() {
+                  selectedDate = newDate;
+                  selectedFilter = newFilter;
+                });
+                _loadTransactions();
+              },
             ),
-          ).then((_) => _loadTransactions());
-        },
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white),
-        backgroundColor: Theme.of(context).primaryColor,
+            const SizedBox(height: 10),
+            BalanceSection(
+              totalIncome: income,
+              totalExpenses: expenses,
+              totalBalance: totalBalance,
+              title: 'Resumen de Cuenta',
+              mainCurrency: mainCurrency,
+            ),
+            const SizedBox(height: 10),
+            Expanded(child: contentView,),
+          ],
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AddTransactionScreen(
+                  accounts: accounts,
+                  categories: categories,
+                ),
+                settings: RouteSettings(arguments: {
+                  'account_id': widget.accountId,
+                  'account_currency': widget.accountCurrency,
+                }),
+              ),
+            ).then((_) => _loadTransactions());
+          },
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add, color: Colors.white),
+          backgroundColor: Theme.of(context).primaryColor,
 
-      ),
+        ),
+      )
     );
   }
+
   Color _getBalanceColor(List<Map<String, dynamic>> transactions) {
     double income = 0;
     double expense = 0;
 
     for (final t in transactions) {
-      double amount = t['amount'] ?? 0.0;
-      String currency = t['currency'] ?? mainCurrency;
+      double amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+
       if (t['type'] == 'income') {
         income += amount;
       } else if (t['type'] == 'expense') {
         expense += amount;
+      } else if (t['type'] == 'transfer') {
+        if (widget.accountId != null) {
+          if (t['account_id'] == widget.accountId) {
+            expense += amount;
+          } else if (t['linked_account_id'] == widget.accountId) {
+            income += amount;
+          }
+        }
       }
     }
 

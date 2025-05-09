@@ -259,6 +259,8 @@ class DashboardScreenState extends State<DashboardScreen> {
                   accounts: accounts,
                   categories: categories,
                   onTransactionUpdated: _loadTransactions,
+                  currentAccountId: -1
+
                 );
               }).toList(),
               const SizedBox(height: 12),

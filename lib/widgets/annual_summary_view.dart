@@ -55,7 +55,6 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
   Future<void> _loadData() async {
     final db = DatabaseHelper();
     final mainCurrency = await SettingsHelper().getMainCurrency();
-
     final allTransactions = widget.accountId != null
         ? await db.getTransactionsByAccount(widget.accountId!)
         : await db.getTransactions();
@@ -63,13 +62,11 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
     Map<int, Map<String, double>> monthTotals = {};
     Map<int, List<Map<String, dynamic>>> monthWeeks = {};
 
-    // CALCULAR TOTALES MENSUALES
     for (var t in allTransactions) {
       final dateStr = t['date'].split(' ')[0];
       final date = DateTime.parse(dateStr);
 
       if (date.year != widget.selectedDate.year) continue;
-      if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
 
       final month = date.month;
       final amount = t['amount'] ?? 0.0;
@@ -84,14 +81,22 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
       } else if (t['type'] == 'expense') {
         monthTotals[month]!['expense'] = monthTotals[month]!['expense']! + converted;
         monthTotals[month]!['balance'] = monthTotals[month]!['balance']! - converted;
+      } else if (t['type'] == 'transfer') {
+        if (widget.accountId != null) {
+          if (t['account_id'] == widget.accountId) {
+            monthTotals[month]!['expense'] = monthTotals[month]!['expense']! + converted;
+            monthTotals[month]!['balance'] = monthTotals[month]!['balance']! - converted;
+          } else if (t['linked_account_id'] == widget.accountId) {
+            monthTotals[month]!['income'] = monthTotals[month]!['income']! + converted;
+            monthTotals[month]!['balance'] = monthTotals[month]!['balance']! + converted;
+          }
+        }
       }
     }
 
-    // CALCULAR SEMANAS POR MES
     for (int month = 1; month <= 12; month++) {
       DateTime firstDayOfMonth = DateTime(widget.selectedDate.year, month, 1);
       DateTime lastDayOfMonth = DateTime(widget.selectedDate.year, month + 1, 0);
-
       DateTime startOfWeek = firstDayOfMonth.subtract(Duration(days: firstDayOfMonth.weekday - 1));
       DateTime endOfCalendar = lastDayOfMonth.add(Duration(days: 7 - lastDayOfMonth.weekday));
 
@@ -106,15 +111,25 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
           final dateStr = t['date'].split(' ')[0];
           final date = DateTime.parse(dateStr);
 
-          if (date.isAfter(endOfWeek) || date.isBefore(startOfWeek)) continue;
-          if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
+          if (date.isBefore(startOfWeek) || date.isAfter(endOfWeek)) continue;
 
           final amount = t['amount'] ?? 0.0;
           final currency = t['currency'] ?? 'USD';
           final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
 
-          if (t['type'] == 'income') income += converted;
-          if (t['type'] == 'expense') expense += converted;
+          if (t['type'] == 'income') {
+            income += converted;
+          } else if (t['type'] == 'expense') {
+            expense += converted;
+          } else if (t['type'] == 'transfer') {
+            if (widget.accountId != null) {
+              if (t['account_id'] == widget.accountId) {
+                expense += converted;
+              } else if (t['linked_account_id'] == widget.accountId) {
+                income += converted;
+              }
+            }
+          }
         }
 
         if (startOfWeek.isAfter(lastDayOfMonth)) break;
@@ -138,7 +153,6 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
       weeklySummary = monthWeeks;
     });
   }
-
 
 
   @override

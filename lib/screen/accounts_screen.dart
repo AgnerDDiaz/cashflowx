@@ -180,10 +180,13 @@ class AccountsScreenState extends State<AccountsScreen> {
                                     accountCurrency: account['currency'],
                                     accounts: accounts,
                                     categories: categories,
-                                  )
-
+                                  ),
                                 ),
-                              );
+                              ).then((value) {
+                                if (value == true) {
+                                  _loadAccounts(); // o el método que tengas para recargar cuentas
+                                }
+                              });
 
                             },
                           );
@@ -203,10 +206,14 @@ class AccountsScreenState extends State<AccountsScreen> {
                                     accountCurrency: account['currency'],
                                     accounts: accounts,
                                     categories: categories,
-                                  )
-
+                                  ),
                                 ),
-                              );
+                              ).then((value) {
+                                if (value == true) {
+                                  _loadAccounts(); // o el método que tengas para recargar cuentas
+                                }
+                              });
+
 
                             },
 

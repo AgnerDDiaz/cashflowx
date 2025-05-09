@@ -10,6 +10,7 @@ class TransactionItem extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
   final VoidCallback onTransactionUpdated;
+  final int currentAccountId;
 
   const TransactionItem({
     Key? key,
@@ -17,6 +18,7 @@ class TransactionItem extends StatefulWidget {
     required this.accounts,
     required this.categories,
     required this.onTransactionUpdated,
+    required this.currentAccountId,
   }) : super(key: key);
 
   @override
@@ -52,10 +54,10 @@ class _TransactionItemState extends State<TransactionItem> {
   Widget build(BuildContext context) {
     String type = widget.transaction['type'];
     double amount = widget.transaction['amount'] ?? 0.0;
-    String category = _getCategoryName(widget.transaction['category_id']);
-    String account = _getAccountName(widget.transaction['account_id']);
     String transactionCurrency = widget.transaction['currency'] ?? 'DOP';
 
+    String category = _getCategoryName(widget.transaction['category_id']);
+    String account = _getAccountName(widget.transaction['account_id']);
     String linkedAccountName = widget.transaction['linked_account_id'] != null
         ? _getAccountName(widget.transaction['linked_account_id'])
         : '';
@@ -65,15 +67,23 @@ class _TransactionItemState extends State<TransactionItem> {
       category = "transfer".tr();
     }
 
-    Color amountColor = type == 'income'
-        ? AppColors.ingresoColor
-        : type == 'expense'
-        ? AppColors.gastoColor
-        : AppColors.balanceColor;
+    // Clasificación lógica ajustada
+    bool isTransfer = type == 'transfer';
+    bool isTransferSender = isTransfer && widget.transaction['account_id'] == widget.currentAccountId;
+    bool isTransferReceiver = isTransfer && widget.transaction['linked_account_id'] == widget.currentAccountId;
 
-    IconData icon = type == 'income'
+    bool isIncome = type == 'income' || isTransferReceiver;
+    bool isExpense = type == 'expense' || isTransferSender;
+
+    Color amountColor = isIncome
+        ? AppColors.ingresoColor
+        : isExpense
+        ? AppColors.gastoColor
+        : Colors.grey;
+
+    IconData icon = isIncome
         ? Icons.arrow_upward
-        : type == 'expense'
+        : isExpense
         ? Icons.arrow_downward
         : Icons.compare_arrows;
 
@@ -96,7 +106,7 @@ class _TransactionItemState extends State<TransactionItem> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              "$transactionCurrency ${amount.toStringAsFixed(2)}",
+              "$transactionCurrency ${isExpense ? '-' : '+'}${amount.toStringAsFixed(2)}",
               style: TextStyle(
                 color: amountColor,
                 fontWeight: FontWeight.bold,

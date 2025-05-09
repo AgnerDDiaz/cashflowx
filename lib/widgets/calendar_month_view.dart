@@ -71,13 +71,11 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
       if (date.isBefore(start.subtract(const Duration(days: 7))) ||
           date.isAfter(end.add(const Duration(days: 7)))) continue;
 
-      if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
-
-      summary.putIfAbsent(dateStr, () => {'income': 0, 'expense': 0, 'balance': 0});
-
       final amount = t['amount'] ?? 0.0;
       final currency = t['currency'] ?? 'USD';
       final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+      summary.putIfAbsent(dateStr, () => {'income': 0, 'expense': 0, 'balance': 0});
 
       if (t['type'] == 'income') {
         summary[dateStr]!['income'] = summary[dateStr]!['income']! + converted;
@@ -85,6 +83,16 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
       } else if (t['type'] == 'expense') {
         summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + converted;
         summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - converted;
+      } else if (t['type'] == 'transfer') {
+        if (widget.accountId != null) {
+          if (t['account_id'] == widget.accountId) {
+            summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + converted;
+            summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - converted;
+          } else if (t['linked_account_id'] == widget.accountId) {
+            summary[dateStr]!['income'] = summary[dateStr]!['income']! + converted;
+            summary[dateStr]!['balance'] = summary[dateStr]!['balance']! + converted;
+          }
+        }
       }
     }
 
