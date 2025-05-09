@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../utils/database_helper.dart';
 import '../screen/main_screen.dart';
 import '../utils/app_colors.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 
 
 class AnnualSummaryView extends StatefulWidget {
@@ -11,6 +13,10 @@ class AnnualSummaryView extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> transactions;
+  final void Function(DateTime date, String filter)? onFilterChange;
+  final int? accountId;
+  final String? accountCurrency;
+
 
   const AnnualSummaryView({
     Key? key,
@@ -18,6 +24,9 @@ class AnnualSummaryView extends StatefulWidget {
     required this.accounts,
     required this.categories,
     required this.transactions,
+    this.onFilterChange,
+    this.accountId,
+    this.accountCurrency,
   }) : super(key: key);
 
   @override
@@ -35,32 +44,50 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
     _loadData();
   }
 
+  @override
+  void didUpdateWidget(covariant AnnualSummaryView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate.year != widget.selectedDate.year) {
+      _loadData();
+    }
+  }
+
   Future<void> _loadData() async {
     final db = DatabaseHelper();
-    final allTransactions = await db.getTransactions();
+    final mainCurrency = await SettingsHelper().getMainCurrency();
+
+    final allTransactions = widget.accountId != null
+        ? await db.getTransactionsByAccount(widget.accountId!)
+        : await db.getTransactions();
 
     Map<int, Map<String, double>> monthTotals = {};
     Map<int, List<Map<String, dynamic>>> monthWeeks = {};
 
+    // CALCULAR TOTALES MENSUALES
     for (var t in allTransactions) {
       final dateStr = t['date'].split(' ')[0];
       final date = DateTime.parse(dateStr);
 
       if (date.year != widget.selectedDate.year) continue;
+      if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
+
       final month = date.month;
+      final amount = t['amount'] ?? 0.0;
+      final currency = t['currency'] ?? 'USD';
+      final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
 
       monthTotals.putIfAbsent(month, () => {'income': 0, 'expense': 0, 'balance': 0});
 
-      final amount = t['amount'] ?? 0.0;
       if (t['type'] == 'income') {
-        monthTotals[month]!['income'] = monthTotals[month]!['income']! + amount;
-        monthTotals[month]!['balance'] = monthTotals[month]!['balance']! + amount;
+        monthTotals[month]!['income'] = monthTotals[month]!['income']! + converted;
+        monthTotals[month]!['balance'] = monthTotals[month]!['balance']! + converted;
       } else if (t['type'] == 'expense') {
-        monthTotals[month]!['expense'] = monthTotals[month]!['expense']! + amount;
-        monthTotals[month]!['balance'] = monthTotals[month]!['balance']! - amount;
+        monthTotals[month]!['expense'] = monthTotals[month]!['expense']! + converted;
+        monthTotals[month]!['balance'] = monthTotals[month]!['balance']! - converted;
       }
     }
 
+    // CALCULAR SEMANAS POR MES
     for (int month = 1; month <= 12; month++) {
       DateTime firstDayOfMonth = DateTime(widget.selectedDate.year, month, 1);
       DateTime lastDayOfMonth = DateTime(widget.selectedDate.year, month + 1, 0);
@@ -78,11 +105,16 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
         for (var t in allTransactions) {
           final dateStr = t['date'].split(' ')[0];
           final date = DateTime.parse(dateStr);
+
           if (date.isAfter(endOfWeek) || date.isBefore(startOfWeek)) continue;
+          if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
 
           final amount = t['amount'] ?? 0.0;
-          if (t['type'] == 'income') income += amount;
-          if (t['type'] == 'expense') expense += amount;
+          final currency = t['currency'] ?? 'USD';
+          final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+          if (t['type'] == 'income') income += converted;
+          if (t['type'] == 'expense') expense += converted;
         }
 
         if (startOfWeek.isAfter(lastDayOfMonth)) break;
@@ -106,6 +138,8 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
       weeklySummary = monthWeeks;
     });
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -167,20 +201,9 @@ class _AnnualSummaryViewState extends State<AnnualSummaryView> {
                   children: [
                     GestureDetector(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MainScreen(
-                              accounts: widget.accounts,
-                              categories: widget.categories,
-                              transactions: widget.transactions,
-                            ),
-                            settings: RouteSettings(arguments: {
-                              'filter': 'weekly', // 👈 valor interno, no traducido
-                              'date': week['start'],
-                            }),
-                          ),
-                        );
+                        if (widget.onFilterChange != null) {
+                          widget.onFilterChange!(week['start'], 'weekly');
+                        }
                       },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

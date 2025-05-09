@@ -5,6 +5,8 @@ import '../screen/account_detail_screen.dart';
 import '../screen/dashboard_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
+import '../utils/exchange_rate_service.dart';
+import '../utils/settings_helper.dart';
 
 class CalendarMonthView extends StatefulWidget {
   final DateTime selectedDate;
@@ -51,10 +53,11 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
 
   Future<void> _loadMonthlyData() async {
     final db = DatabaseHelper();
-    final allTransactions = widget.accountId != null
-        ? await DatabaseHelper().getTransactionsByAccount(widget.accountId!)
-        : await DatabaseHelper().getTransactions();
+    final mainCurrency = await SettingsHelper().getMainCurrency();
 
+    final allTransactions = widget.accountId != null
+        ? await db.getTransactionsByAccount(widget.accountId!)
+        : await db.getTransactions();
 
     final start = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
     final end = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0);
@@ -64,22 +67,30 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     for (var t in allTransactions) {
       final dateStr = t['date'].split(' ')[0];
       final date = DateTime.parse(dateStr);
-      if (date.isBefore(start.subtract(const Duration(days: 7))) || date.isAfter(end.add(const Duration(days: 7)))) continue;
+
+      if (date.isBefore(start.subtract(const Duration(days: 7))) ||
+          date.isAfter(end.add(const Duration(days: 7)))) continue;
+
+      if (widget.accountId != null && t['account_id'] != widget.accountId) continue;
 
       summary.putIfAbsent(dateStr, () => {'income': 0, 'expense': 0, 'balance': 0});
 
       final amount = t['amount'] ?? 0.0;
+      final currency = t['currency'] ?? 'USD';
+      final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
       if (t['type'] == 'income') {
-        summary[dateStr]!['income'] = summary[dateStr]!['income']! + amount;
-        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! + amount;
+        summary[dateStr]!['income'] = summary[dateStr]!['income']! + converted;
+        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! + converted;
       } else if (t['type'] == 'expense') {
-        summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + amount;
-        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - amount;
+        summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + converted;
+        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - converted;
       }
     }
 
     setState(() => dailySummary = summary);
   }
+
 
   @override
   Widget build(BuildContext context) {

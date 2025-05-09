@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:sqflite/sqflite.dart';
 import '../utils/currency_service.dart';
+import '../utils/database_helper.dart';
+import '../utils/settings_helper.dart';
 
 class SearchCurrencyFromApiScreen extends StatefulWidget {
   const SearchCurrencyFromApiScreen({Key? key}) : super(key: key);
@@ -11,6 +14,7 @@ class SearchCurrencyFromApiScreen extends StatefulWidget {
 
 class _SearchCurrencyFromApiScreenState extends State<SearchCurrencyFromApiScreen> {
   final CurrencyService _currencyService = CurrencyService();
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, String>> allCurrencies = [];
   String searchQuery = '';
   bool isLoading = true;
@@ -36,6 +40,37 @@ class _SearchCurrencyFromApiScreenState extends State<SearchCurrencyFromApiScree
         isLoading = false;
       });
     }
+  }
+
+  Future<void> _handleCurrencySelection(Map<String, String> currency) async {
+    final code = currency['code']!;
+    final name = currency['name'] ?? '';
+    final mainCurrency = await SettingsHelper().getMainCurrency();
+
+    final db = await _dbHelper.database;
+
+    // Guardar nombre si no existe aún
+    await db.insert('currency_names', {
+      'code': code,
+      'name': name,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    // Asegurar tasa de cambio base <-> mainCurrency
+    try {
+      await CurrencyService().ensureExchangeRateExists(
+        baseCurrency: code,
+        targetCurrency: mainCurrency,
+        context: context,
+      );
+    } catch (e) {
+      print('❌ Error al guardar tasa de cambio: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('error_saving_currency_exchange'.tr()),
+      ));
+      return;
+    }
+
+    Navigator.pop(context, code);
   }
 
   @override
@@ -80,9 +115,7 @@ class _SearchCurrencyFromApiScreenState extends State<SearchCurrencyFromApiScree
                 final currency = filteredCurrencies[index];
                 return ListTile(
                   title: Text("${currency['code']} - ${currency['name']}"),
-                  onTap: () {
-                    Navigator.pop(context, currency['code']);
-                  },
+                  onTap: () => _handleCurrencySelection(currency),
                 );
               },
             ),

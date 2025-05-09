@@ -106,28 +106,38 @@ class DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
                 ? CalendarMonthView(
-              selectedDate: selectedDate,
-              accounts: accounts,
-              categories: categories,
-              transactions: transactions,
-              onFilterChange: (date, filter) {
-                setState(() {
-                  selectedDate = date;
-                  selectedFilter = filter;
-                  DashboardScreen.lastSelectedDate = date;
-                  DashboardScreen.lastSelectedFilter = filter;
-                });
-                _loadTransactions();
-              },
-            )
+                    selectedDate: selectedDate,
+                    accounts: accounts,
+                    categories: categories,
+                    transactions: transactions,
+                    onFilterChange: (date, filter) {
+                      setState(() {
+                        selectedDate = date;
+                        selectedFilter = filter;
+                        DashboardScreen.lastSelectedDate = date;
+                        DashboardScreen.lastSelectedFilter = filter;
+                      });
+                      _loadTransactions();
+                    },
+                )
                 : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
                 ? AnnualSummaryView(
-              selectedDate: selectedDate,
-              accounts: accounts,
-              categories: categories,
-              transactions: transactions,
-            )
-                : _buildTransactionList(),
+                  selectedDate: selectedDate,
+                  accounts: accounts,
+                  categories: categories,
+                  transactions: transactions,
+                  onFilterChange: (date, filter) {
+                    setState(() {
+                      selectedDate = date;
+                      selectedFilter = filter;
+                      // solo en Dashboard
+                      DashboardScreen.lastSelectedDate = date;
+                      DashboardScreen.lastSelectedFilter = filter;
+                    });
+                    _loadTransactions();
+                  },
+                )
+              : _buildTransactionList(),
           ),
         ],
       ),

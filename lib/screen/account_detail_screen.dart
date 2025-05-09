@@ -245,7 +245,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double totalBalance = income + expenses;
+    double totalBalance = income - expenses;
     final bottomInset = MediaQuery.of(context).viewPadding.bottom + 80;
 
     Widget contentView;
@@ -267,8 +267,18 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
           accounts: widget.accounts,
           categories: widget.categories,
           transactions: transactions,
+          accountId: widget.accountId,
+          accountCurrency: widget.accountCurrency,
+          onFilterChange: (date, filter) {
+            setState(() {
+              selectedDate = date;
+              selectedFilter = filter;
+            });
+            _loadTransactions();
+          },
         ),
       );
+
     } else {
       contentView = Padding(
         padding: EdgeInsets.only(bottom: bottomInset),

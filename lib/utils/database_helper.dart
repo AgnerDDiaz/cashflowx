@@ -147,9 +147,22 @@ class DatabaseHelper {
       'rate_update_interval_days': 30
     });
 
+    await db.execute('''
+      CREATE TABLE currency_names (
+        code TEXT PRIMARY KEY,
+        name TEXT
+      );
+    ''');
+
+
     await insertCategoriesAndSubcategories(db);
     await insertDefaultAccounts(db);
     await insertTestTransactions(db);
+    await db.insert('currency_names', {'code': 'USD', 'name': 'United States Dollar'});
+    await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'});
+    await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'});
+    await db.insert('currency_names', {'code': 'JPY', 'name': 'Japanese Yen'});
+
 
   }
 
@@ -172,6 +185,23 @@ class DatabaseHelper {
           updated_at TEXT NOT NULL
         )
       ''');
+
+      await db.execute('''
+        CREATE TABLE currency_names (
+          code TEXT PRIMARY KEY,
+          name TEXT
+        );
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS currency_names (
+          code TEXT PRIMARY KEY,
+          name TEXT
+        );
+      ''');
+
+
+
     }
   }
 
@@ -937,6 +967,19 @@ class DatabaseHelper {
       whereArgs: [fromCurrency, toCurrency],
     );
   }
+
+  Future<void> insertCurrencyName(String code, String name) async {
+    final db = await database;
+    await db.insert('currency_names', {'code': code, 'name': name},
+        conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<String?> getCurrencyName(String code) async {
+    final db = await database;
+    final result = await db.query('currency_names', where: 'code = ?', whereArgs: [code], limit: 1);
+    return result.isNotEmpty ? result.first['name'] as String : null;
+  }
+
 
 
 

@@ -62,7 +62,16 @@
   "confirm_add_currency": "¿Deseas agregar esta moneda?",
   "error_no_internet": "No se pudo conectar. ¿Agregar tasa manualmente?",
   "enter_exchange_rate": "Introduce la tasa de cambio",
-  "currency": "Moneda"
+  "currency": "Moneda",
+  "choose_main_currency": "Elige la moneda principal",
+  "delete_account": "Eliminar Cuenta",
+  "delete_account_confirmation": "¿Estás seguro que deseas eliminar esta cuenta? Esta acción no se puede deshacer.",
+  "delete_category": "Eliminar Categoría",
+  "delete_category_confirmation": "¿Estás seguro que deseas eliminar esta categoría? Esta acción no se puede deshacer.",
+  "main_currency_updated_to": "Moneda principal actualizada a {}",
+  "change_language": "Cambiar idioma"
+
+
 }
 
 

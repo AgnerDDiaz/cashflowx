@@ -60,7 +60,15 @@
   "confirm_add_currency": "Confirm add currency?",
   "error_no_internet": "Could not connect. Add rate manually?",
   "enter_exchange_rate": "Enter the exchange rate",
-  "currency": "Currency"
+  "currency": "Currency",
+  "choose_main_currency": "Choose main currency",
+  "delete_account": "Delete Account",
+  "delete_account_confirmation": "Are you sure you want to delete this account? This action cannot be undone.",
+  "delete_category": "Delete Category",
+  "delete_category_confirmation": "Are you sure you want to delete this category? This action cannot be undone.",
+  "main_currency_updated_to": "Main currency updated to {}",
+  "change_language": "Change language"
+
 
 }
 

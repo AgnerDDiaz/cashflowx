@@ -12,7 +12,7 @@ class SelectCurrencyScreen extends StatefulWidget {
 
 class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  List<String> allCurrencies = [];
+  List<Map<String, dynamic>> allCurrencies = [];
   String searchQuery = '';
 
   @override
@@ -22,16 +22,29 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
   }
 
   Future<void> _loadCurrencies() async {
-    final currencies = await _dbHelper.getAllCurrencies();
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery('''
+      SELECT DISTINCT base_currency AS code,
+             (SELECT name FROM currency_names WHERE code = base_currency LIMIT 1) AS name
+      FROM exchange_rates
+      UNION
+      SELECT DISTINCT target_currency AS code,
+             (SELECT name FROM currency_names WHERE code = target_currency LIMIT 1) AS name
+      FROM exchange_rates
+    ''');
+
     setState(() {
-      allCurrencies = currencies;
+      allCurrencies = result;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final filteredCurrencies = allCurrencies.where((currency) {
-      return currency.toLowerCase().contains(searchQuery.toLowerCase());
+      final code = (currency['code'] ?? '').toLowerCase();
+      final name = (currency['name'] ?? '').toLowerCase();
+      final combined = '$code - $name';
+      return combined.contains(searchQuery.toLowerCase());
     }).toList();
 
     return Scaffold(
@@ -62,10 +75,12 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
               itemCount: filteredCurrencies.length,
               itemBuilder: (context, index) {
                 final currency = filteredCurrencies[index];
+                final code = currency['code'] ?? '';
+                final name = currency['name'] ?? '';
                 return ListTile(
-                  title: Text(currency),
+                  title: Text('$code - $name'),
                   onTap: () {
-                    Navigator.pop(context, currency);
+                    Navigator.pop(context, code);
                   },
                 );
               },
@@ -81,6 +96,7 @@ class _SelectCurrencyScreenState extends State<SelectCurrencyScreen> {
                   MaterialPageRoute(builder: (context) => const SearchCurrencyFromApiScreen()),
                 );
                 if (newCurrency != null && newCurrency is String) {
+                  await _loadCurrencies(); // Recargar después de agregar
                   Navigator.pop(context, newCurrency);
                 }
               },
