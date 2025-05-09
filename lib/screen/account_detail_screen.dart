@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../utils/app_colors.dart';
 import '../utils/database_helper.dart';
 import '../utils/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
@@ -8,6 +9,7 @@ import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
 import '../widgets/date_selector.dart';
+import 'add_transaction_screen.dart';
 
 class AccountDetailScreen extends StatefulWidget {
   final int accountId;
@@ -140,6 +142,27 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     });
   }
 
+  Future<String> _getBalanceText(List<Map<String, dynamic>> transactions) async {
+    double income = 0;
+    double expense = 0;
+
+    for (final t in transactions) {
+      double amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      double converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+
+      if (t['type'] == 'income') {
+        income += converted;
+      } else if (t['type'] == 'expense' || t['type'] == 'transfer') {
+        expense += converted;
+      }
+    }
+
+    double balance = income - expense;
+    final formatter = NumberFormat.currency(locale: 'en_US', symbol: '$mainCurrency ');
+    return formatter.format(balance);
+  }
+
   Widget _buildTransactionList() {
     Map<String, List<Map<String, dynamic>>> grouped = {};
 
@@ -161,13 +184,48 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-              child: Text(
-                DateFormat('d MMM yyyy').format(DateTime.parse(entry.key)),
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddTransactionScreen(
+                      accounts: accounts,
+                      categories: categories,
+                    ),
+                    settings: RouteSettings(arguments: {
+                      'date': DateTime.parse(entry.key),
+                      'account_id': widget.accountId,
+                      'account_currency': widget.accountCurrency,
+                    }),
+                  ),
+                ).then((_) => _loadTransactions());
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      DateFormat('d MMM yyyy').format(DateTime.parse(entry.key)),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+                      ),
+                    ),
+                    FutureBuilder<String>(
+                      future: _getBalanceText(entry.value),
+                      builder: (context, snapshot) {
+                        return Text(
+                          snapshot.data ?? '',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: snapshot.hasData ? _getBalanceColor(entry.value) : Colors.grey,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -188,6 +246,35 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   @override
   Widget build(BuildContext context) {
     double totalBalance = income + expenses;
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom + 80;
+
+    Widget contentView;
+
+    if (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar") {
+      contentView = CalendarMonthView(
+        selectedDate: selectedDate,
+        accounts: widget.accounts,
+        categories: widget.categories,
+        transactions: transactions,
+        accountId: widget.accountId,
+        accountName: widget.accountName,
+      );
+    } else if (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual") {
+      contentView = Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: AnnualSummaryView(
+          selectedDate: selectedDate,
+          accounts: widget.accounts,
+          categories: widget.categories,
+          transactions: transactions,
+        ),
+      );
+    } else {
+      contentView = Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: _buildTransactionList(),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -215,27 +302,48 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
             mainCurrency: mainCurrency,
           ),
           const SizedBox(height: 10),
-          Expanded(
-            child: (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar")
-                ? CalendarMonthView(
-                selectedDate: selectedDate,
-                accounts: widget.accounts,
-                categories: widget.categories,
-                transactions: transactions,
-                accountId: widget.accountId,
-                accountName: widget.accountName,
-                )
-                : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
-                ? AnnualSummaryView(
-              selectedDate: selectedDate,
-              accounts: widget.accounts,
-              categories: widget.categories,
-              transactions: transactions,
-            )
-                : _buildTransactionList(),
-          ),
+          Expanded(child: contentView,),
         ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddTransactionScreen(
+                accounts: accounts,
+                categories: categories,
+              ),
+              settings: RouteSettings(arguments: {
+                'account_id': widget.accountId,
+                'account_currency': widget.accountCurrency,
+              }),
+            ),
+          ).then((_) => _loadTransactions());
+        },
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: Theme.of(context).primaryColor,
+
       ),
     );
   }
+  Color _getBalanceColor(List<Map<String, dynamic>> transactions) {
+    double income = 0;
+    double expense = 0;
+
+    for (final t in transactions) {
+      double amount = t['amount'] ?? 0.0;
+      String currency = t['currency'] ?? mainCurrency;
+      if (t['type'] == 'income') {
+        income += amount;
+      } else if (t['type'] == 'expense') {
+        expense += amount;
+      }
+    }
+
+    return (income - expense) >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
+  }
+
 }

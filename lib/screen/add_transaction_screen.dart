@@ -44,7 +44,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void initState() {
     super.initState();
     amountController.addListener(_updateConvertedAmount);
-    _loadInitialData();
+
+    // Leer argumentos de la ruta
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      if (args != null) {
+        if (args.containsKey('date')) {
+          selectedDate = args['date'];
+        }
+        if (args.containsKey('account_id')) {
+          selectedAccount = args['account_id'];
+        }
+      }
+
+      _updateConvertedAmount();
+      setState(() {}); // Refrescar UI con valores precargados
+      _loadInitialData();
+    });
   }
 
   Future<void> _loadInitialData() async {
@@ -87,6 +104,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    // Esto asegura que solo se setea una vez al inicio
+    if (args != null && selectedAccount == null) {
+      if (args.containsKey('date')) {
+        selectedDate = args['date'];
+      }
+      if (args.containsKey('account_id')) {
+        selectedAccount = args['account_id'];
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text("add_transaction".tr(), style: Theme.of(context).textTheme.titleLarge)),
       body: SingleChildScrollView(
@@ -100,6 +129,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             const SizedBox(height: 15),
             AccountSelector(
               accounts: widget.accounts,
+              initialSelectedId: selectedAccount,
               onSelect: (selectedId) {
                 setState(() {
                   selectedAccount = selectedId;

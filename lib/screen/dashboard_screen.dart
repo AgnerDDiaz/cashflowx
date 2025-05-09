@@ -110,6 +110,15 @@ class DashboardScreenState extends State<DashboardScreen> {
               accounts: accounts,
               categories: categories,
               transactions: transactions,
+              onFilterChange: (date, filter) {
+                setState(() {
+                  selectedDate = date;
+                  selectedFilter = filter;
+                  DashboardScreen.lastSelectedDate = date;
+                  DashboardScreen.lastSelectedFilter = filter;
+                });
+                _loadTransactions();
+              },
             )
                 : (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual")
                 ? AnnualSummaryView(
@@ -126,7 +135,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadTransactions() async {
-    final data = await DatabaseHelper().getTransactions();
+    List<Map<String, dynamic>>  data = await DatabaseHelper().getTransactions();
     setState(() {
       transactions = data.where((t) {
         DateTime transactionDate = DateTime.parse(t['date']);

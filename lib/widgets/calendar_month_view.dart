@@ -13,6 +13,8 @@ class CalendarMonthView extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> transactions;
+  final void Function(DateTime date, String filter)? onFilterChange;
+
 
   const CalendarMonthView({
     Key? key,
@@ -22,6 +24,7 @@ class CalendarMonthView extends StatefulWidget {
     this.accounts = const [],
     this.categories = const [],
     this.transactions = const [],
+    this.onFilterChange
   }) : super(key: key);
 
 
@@ -114,10 +117,6 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
         ],
       );
   }
-  String _getAccountName(int accountId) {
-    // Aquí puedes usar una función similar a lo que haces en TransactionItem
-    return "Cuenta";
-  }
 
 
   Widget _buildDayCell(int index, int firstWeekday, int totalDaysInMonth, int daysInPrevMonth) {
@@ -159,7 +158,7 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
               MaterialPageRoute(
                 builder: (_) => AccountDetailScreen(
                   accountId: widget.accountId!,
-                  accountName: widget.accountName ?? 'Cuenta',
+                  accountName: widget.accountName ?? "accounts".tr(),
                   accountCurrency: 'DOP',
                   accounts: [],
                   categories: [],
@@ -171,17 +170,10 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
               ),
             );
           } else {
-            // Estamos en Dashboard, solo actualiza el filtro global y redibuja
-            DashboardScreen.lastSelectedDate = monday;
-            DashboardScreen.lastSelectedFilter = 'weekly';
-            Navigator.push(
-            context,
-              MaterialPageRoute(builder: (_) => const DashboardScreen(
-                accounts: [],
-                transactions: [],
-                categories: [],
-              )),
-            );
+            if (widget.onFilterChange != null) {
+              widget.onFilterChange!(monday, 'weekly');
+            }
+
           }
         },
 
