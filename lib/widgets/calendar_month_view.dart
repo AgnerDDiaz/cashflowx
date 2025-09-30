@@ -1,245 +1,370 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../screen/account_detail_screen.dart';
-import '../screen/dashboard_screen.dart';
+
 import '../utils/app_colors.dart';
-import '../utils/database_helper.dart';
 import '../utils/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
 
+/// Notifica al padre un cambio de filtro/fecha
+typedef FilterChange = void Function(DateTime date, String filter);
+
 class CalendarMonthView extends StatefulWidget {
   final DateTime selectedDate;
-  final int? accountId;
-  final String? accountName;
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> transactions;
-  final void Function(DateTime date, String filter)? onFilterChange;
-
+  final FilterChange onFilterChange;
 
   const CalendarMonthView({
-    Key? key,
+    super.key,
     required this.selectedDate,
-    this.accountId,
-    this.accountName,
-    this.accounts = const [],
-    this.categories = const [],
-    this.transactions = const [],
-    this.onFilterChange
-  }) : super(key: key);
-
+    required this.accounts,
+    required this.categories,
+    required this.transactions,
+    required this.onFilterChange,
+  });
 
   @override
   State<CalendarMonthView> createState() => _CalendarMonthViewState();
 }
 
 class _CalendarMonthViewState extends State<CalendarMonthView> {
-  Map<String, Map<String, double>> dailySummary = {}; // fecha -> { income, expense, balance }
+  // Preferencias
+  String _firstWeekday = 'monday'; // 'monday' | 'sunday'
+  String _mainCurrency = 'DOP';
+
+  // 42 celdas visibles (6 semanas x 7 días)
+  List<DateTime> _visibleDays = const [];
+
+  // Resumen por día (yyyy-MM-dd)
+  final Map<String, _DaySummary> _dailySummary = {};
 
   @override
   void initState() {
     super.initState();
-    _loadMonthlyData();
+    _loadPrefsAndBuild();
   }
 
   @override
-  void didUpdateWidget(CalendarMonthView oldWidget) {
+  void didUpdateWidget(covariant CalendarMonthView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedDate != widget.selectedDate) {
-      _loadMonthlyData();
+    if (oldWidget.selectedDate.year != widget.selectedDate.year ||
+        oldWidget.selectedDate.month != widget.selectedDate.month ||
+        oldWidget.transactions != widget.transactions) {
+      _rebuildVisibleDays();
+      _rebuildSummary();
     }
   }
 
-  Future<void> _loadMonthlyData() async {
-    final db = DatabaseHelper();
-    final mainCurrency = await SettingsHelper().getMainCurrency();
+  Future<void> _loadPrefsAndBuild() async {
+    final first = await SettingsHelper().getFirstWeekday();
+    final currency = await SettingsHelper().getMainCurrency();
+    setState(() {
+      _firstWeekday = (first == 'sunday') ? 'sunday' : 'monday';
+      _mainCurrency = currency;
+    });
+    _rebuildVisibleDays();
+    await _rebuildSummary();
+  }
 
-    final allTransactions = widget.accountId != null
-        ? await db.getTransactionsByAccount(widget.accountId!)
-        : await db.getTransactions();
+  /// Inicio de semana según configuración (domingo o lunes)
+  DateTime _startOfWeek(DateTime d) {
+    final startWeekday =
+    (_firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
+    final back = (d.weekday - startWeekday + 7) % 7;
+    return DateTime(d.year, d.month, d.day).subtract(Duration(days: back));
+  }
 
-    final start = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
-    final end = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0);
+  void _rebuildVisibleDays() {
+    final firstDayOfMonth =
+    DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
+    final lastDayOfMonth =
+    DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0);
 
-    Map<String, Map<String, double>> summary = {};
+    final startWeekday =
+    (_firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
 
-    for (var t in allTransactions) {
-      final dateStr = t['date'].split(' ')[0];
-      final date = DateTime.parse(dateStr);
+    // Primer visible = retroceder hasta el inicio de semana
+    final back = (firstDayOfMonth.weekday - startWeekday + 7) % 7;
+    final firstVisible = firstDayOfMonth.subtract(Duration(days: back));
 
-      if (date.isBefore(start.subtract(const Duration(days: 7))) ||
-          date.isAfter(end.add(const Duration(days: 7)))) continue;
+    // Último visible = avanzar hasta el fin de semana
+    int forward;
+    if (startWeekday == DateTime.monday) {
+      // Semana termina en domingo
+      forward = (7 - lastDayOfMonth.weekday) % 7;
+    } else {
+      // Semana empieza domingo, termina sábado
+      forward = (lastDayOfMonth.weekday % 7);
+    }
+    DateTime lastVisible = lastDayOfMonth.add(Duration(days: forward));
 
-      final amount = t['amount'] ?? 0.0;
-      final currency = t['currency'] ?? 'USD';
-      final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+    // Garantizar 42 celdas
+    int count = lastVisible.difference(firstVisible).inDays + 1;
+    if (count < 42) {
+      lastVisible = lastVisible.add(Duration(days: 42 - count));
+    }
 
-      summary.putIfAbsent(dateStr, () => {'income': 0, 'expense': 0, 'balance': 0});
+    final days = List<DateTime>.generate(
+      lastVisible.difference(firstVisible).inDays + 1,
+          (i) => DateTime(
+          firstVisible.year, firstVisible.month, firstVisible.day + i),
+    );
 
-      if (t['type'] == 'income') {
-        summary[dateStr]!['income'] = summary[dateStr]!['income']! + converted;
-        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! + converted;
-      } else if (t['type'] == 'expense') {
-        summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + converted;
-        summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - converted;
-      } else if (t['type'] == 'transfer') {
-        if (widget.accountId != null) {
-          if (t['account_id'] == widget.accountId) {
-            summary[dateStr]!['expense'] = summary[dateStr]!['expense']! + converted;
-            summary[dateStr]!['balance'] = summary[dateStr]!['balance']! - converted;
-          } else if (t['linked_account_id'] == widget.accountId) {
-            summary[dateStr]!['income'] = summary[dateStr]!['income']! + converted;
-            summary[dateStr]!['balance'] = summary[dateStr]!['balance']! + converted;
-          }
-        }
+    setState(() {
+      _visibleDays = days;
+    });
+  }
+
+  Future<void> _rebuildSummary() async {
+    _dailySummary.clear();
+
+    for (final t in widget.transactions) {
+      final raw = t['date'] as String?;
+      if (raw == null) continue;
+
+      DateTime d;
+      try {
+        d = DateTime.parse(raw);
+      } catch (_) {
+        continue;
       }
+
+      final dayKey = DateFormat('yyyy-MM-dd').format(d);
+      final type = (t['type'] as String?) ?? '';
+      final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+      final currency = (t['currency'] as String?) ?? _mainCurrency;
+
+      final converted = await ExchangeRateService.localConvert(
+          amount, currency, _mainCurrency);
+
+      _dailySummary.putIfAbsent(dayKey, () => _DaySummary.zero());
+      if (type == 'income') {
+        _dailySummary[dayKey] =
+            _dailySummary[dayKey]!.add(income: converted);
+      } else if (type == 'expense') {
+        _dailySummary[dayKey] =
+            _dailySummary[dayKey]!.add(expense: converted);
+      }
+      // transfer: se omite del resumen global
     }
 
-    setState(() => dailySummary = summary);
+    if (mounted) setState(() {});
   }
-
 
   @override
   Widget build(BuildContext context) {
-    final firstDayOfMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month, 1);
-    final totalDaysInMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, 0).day;
-    final firstWeekday = (firstDayOfMonth.weekday + 6) % 7; // lunes = 0
-
-    final prevMonth = DateTime(widget.selectedDate.year, widget.selectedDate.month - 1, 1);
-    final daysInPrevMonth = DateTime(prevMonth.year, prevMonth.month + 1, 0).day;
-
-    List<Widget> rows = [];
-    int totalCells = 42; // 6 weeks * 7 days
-
-    for (int i = 0; i < totalCells; i += 7) {
-      rows.add(Row(
-        children: List.generate(7, (j) => Expanded(child: _buildDayCell(i + j, firstWeekday, totalDaysInMonth, daysInPrevMonth))),
-      ));
-    }
+    // Etiquetas de días según primer día de semana
+    final locale = context.locale.toString();
+    final startW =
+    (_firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
+    final weekdayOrder =
+    List<int>.generate(7, (i) => ((startW + i - 1) % 7) + 1);
+    final weekdayLabels = weekdayOrder
+        .map((w) => DateFormat.E(locale).format(
+      DateTime(2024, 9, w == 7 ? 1 : w), // mapeo estable
+    ))
+        .toList();
 
     return Column(
-        children: [
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: ['monday'.tr(), 'tuesday'.tr(), 'wednesday'.tr(), 'thursday'.tr(), 'friday'.tr(), 'saturday'.tr(), 'sunday'.tr()]
-                .map((d) => Expanded(
-              child: Center(
-                  child: Text(d,
-                      style: TextStyle(fontWeight: FontWeight.bold))),
-            ))
-                .toList(),
+      children: [
+        _WeekHeader(labels: weekdayLabels),
+        const SizedBox(height: 8),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cellWidth = constraints.maxWidth / 7;
+              final cellHeight = constraints.maxHeight / 6;
+
+              return Padding(
+                // margen para FAB/bottom bar y evitar overflow
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).padding.bottom + 80,
+                ),
+                child: GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: _visibleDays.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    childAspectRatio: cellWidth / cellHeight,
+                  ),
+                  itemBuilder: (_, i) {
+                    final date = _visibleDays[i];
+                    final isCurrentMonth =
+                        date.month == widget.selectedDate.month;
+                    return _buildDayCell(
+                        context, date, isCurrentMonth, cellWidth, cellHeight);
+                  },
+                ),
+              );
+            },
           ),
-          const SizedBox(height: 4),
-          ...rows,
-        ],
-      );
+        ),
+      ],
+    );
   }
 
+  Widget _buildDayCell(
+      BuildContext context, DateTime date, bool isCurrentMonth, double w, double h) {
+    final dateKey = DateFormat('yyyy-MM-dd').format(date);
+    final summary = _dailySummary[dateKey] ?? _DaySummary.zero();
 
-  Widget _buildDayCell(int index, int firstWeekday, int totalDaysInMonth, int daysInPrevMonth) {
-    int dayNum = index - firstWeekday + 1;
-    DateTime date;
-    bool isCurrentMonth = true;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (dayNum < 1) {
-      isCurrentMonth = false;
-      date = DateTime(widget.selectedDate.year, widget.selectedDate.month - 1, daysInPrevMonth + dayNum);
-    } else if (dayNum > totalDaysInMonth) {
-      isCurrentMonth = false;
-      date = DateTime(widget.selectedDate.year, widget.selectedDate.month + 1, dayNum - totalDaysInMonth);
-    } else {
-      date = DateTime(widget.selectedDate.year, widget.selectedDate.month, dayNum);
-    }
+    // Paleta basada en el tema para evitar “blancos”
+    final Color baseInMonth = Theme.of(context).cardColor;
+    final Color baseOutMonth = isDark
+        ? Colors.white.withOpacity(0.06)
+        : Colors.black.withOpacity(0.04);
 
-    final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    final data = dailySummary[dateStr] ?? {'income': 0.0, 'expense': 0.0, 'balance': 0.0};
+    // Días sin movimientos usan un fondo un poco más apagado
+    final bool empty = summary.isEmpty;
+    final Color bgColor = !isCurrentMonth
+        ? baseOutMonth
+        : (empty
+        ? (isDark
+        ? baseInMonth.withOpacity(0.65)
+        : baseInMonth.withOpacity(0.85))
+        : baseInMonth);
 
-    bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    Color bgColor;
-
-    if (isCurrentMonth) {
-      bgColor = isDarkMode ? AppColors.calendarCardLightDarkMode : AppColors.calendarCardLight;
-    } else {
-      bgColor = isDarkMode ? AppColors.calendarCardDarkDarkMode : AppColors.calendarCardDark;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          final monday = date.subtract(Duration(days: date.weekday - 1));
-
-          if (widget.accountId != null) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AccountDetailScreen(
-                  accountId: widget.accountId!,
-                  accountName: widget.accountName ?? "accounts".tr(),
-                  accountCurrency: 'DOP',
-                  accounts: [],
-                  categories: [],
-                ),
-                settings: RouteSettings(arguments: {
-                  'filter': 'weekly',
-                  'date': monday,
-                }),
-              ),
-            );
-          } else {
-            if (widget.onFilterChange != null) {
-              widget.onFilterChange!(monday, 'weekly');
-            }
-
-          }
-        },
-
-        borderRadius: BorderRadius.circular(4),
-        splashColor: Colors.black12,
-        child: Container(
-          height: MediaQuery.of(context).size.height / 11,
-          margin: const EdgeInsets.all(2),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(4),
+    return InkWell(
+      onTap: () {
+        // Cambia a vista semanal centrada en esta fecha
+        final start = _startOfWeek(date);
+        widget.onFilterChange(start, 'weekly');
+      },
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isCurrentMonth
+                ? Colors.transparent
+                : (isDark
+                ? Colors.white.withOpacity(0.08)
+                : Colors.black.withOpacity(0.06)),
+            width: 1,
           ),
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment.topLeft,
-                child: Text(
-                  '${date.day}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).textTheme.bodyLarge?.color,
-                  ),
-                ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Día
+            Text(
+              '${date.day}',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isCurrentMonth
+                    ? Theme.of(context).textTheme.labelLarge?.color
+                    : Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.color
+                    ?.withOpacity(0.40),
               ),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text("${data['income']!.toStringAsFixed(0)}",
-                        style: const TextStyle(fontSize: 11, color: AppColors.ingresoColor)),
-                    Text("${data['expense']!.toStringAsFixed(0)}",
-                        style: const TextStyle(fontSize: 11, color: AppColors.gastoColor)),
-                    Text("${data['balance']!.toStringAsFixed(0)}",
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(context).textTheme.bodyLarge?.color,
-                            fontWeight: FontWeight.bold)),
-                  ],
-                ),
+            ),
+            const Spacer(),
+            // Sumario (ingreso / gasto / balance)
+            if (!summary.isEmpty) ...[
+              _LineAmount(
+                amount: summary.income,
+                currency: _mainCurrency,
+                color: AppColors.ingresoColor,
+              ),
+              _LineAmount(
+                amount: summary.expense,
+                currency: _mainCurrency,
+                color: AppColors.gastoColor,
+              ),
+              _LineAmount(
+                amount: summary.balance,
+                currency: _mainCurrency,
+                color: Theme.of(context).textTheme.bodySmall?.color,
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _WeekHeader extends StatelessWidget {
+  final List<String> labels;
+  const _WeekHeader({required this.labels});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: labels
+          .map(
+            (l) => Expanded(
+          child: Center(
+            child: Text(
+              l.toUpperCase(),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.color
+                    ?.withOpacity(0.7),
+              ),
+            ),
+          ),
+        ),
+      )
+          .toList(),
+    );
+  }
+}
+
+class _LineAmount extends StatelessWidget {
+  final double amount;
+  final String currency;
+  final Color? color;
+
+  const _LineAmount({
+    required this.amount,
+    required this.currency,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (amount == 0) return const SizedBox.shrink();
+    final formatter =
+    NumberFormat.currency(locale: 'en_US', symbol: '$currency ');
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        formatter.format(amount),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _DaySummary {
+  final double income;
+  final double expense;
+
+  const _DaySummary(this.income, this.expense);
+
+  factory _DaySummary.zero() => const _DaySummary(0, 0);
+
+  bool get isEmpty => income == 0 && expense == 0;
+  double get balance => income - expense;
+
+  _DaySummary add({double income = 0, double expense = 0}) =>
+      _DaySummary(this.income + income, this.expense + expense);
 }

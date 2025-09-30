@@ -8,7 +8,7 @@ import '../widgets/annual_summary_view.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
-import '../widgets/date_selector.dart';
+import '../widgets/selectors/date_selector.dart';
 import 'add_transaction_screen.dart';
 
 class AccountDetailScreen extends StatefulWidget {
@@ -63,6 +63,15 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     _loadTransactions();
   }
 
+  Future<String> _getFirstWeekday() async =>
+      (await SettingsHelper().getFirstWeekday());
+  DateTime _startOfWeek(DateTime d, String firstWeekday) {
+    final startW = (firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
+    final back = (d.weekday - startW + 7) % 7;
+    return DateTime(d.year, d.month, d.day).subtract(Duration(days: back));
+  }
+
+
 
   Future<void> _loadData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'USD';
@@ -79,32 +88,36 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     double totalIncome = 0.0;
     double totalExpenses = 0.0;
 
+    final firstW = await _getFirstWeekday();
+
     final filtered = result.where((tx) {
-      DateTime date = DateTime.parse(tx['date']);
-      DateTime start;
-      DateTime end;
+      final date = DateTime.parse(tx['date']);
+
+      late DateTime start;
+      late DateTime end;
 
       switch (selectedFilter) {
         case 'weekly':
-          start = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
-          end = start.add(const Duration(days: 6));
+          start = _startOfWeek(selectedDate, firstW);
+          end   = start.add(const Duration(days: 7)); // ← END EXCLUSIVO, 7 días completos
           break;
         case 'monthly':
         case 'calendar':
           start = DateTime(selectedDate.year, selectedDate.month, 1);
-          end = DateTime(selectedDate.year, selectedDate.month + 1, 1);
+          end   = DateTime(selectedDate.year, selectedDate.month + 1, 1);
           break;
         case 'annual':
           start = DateTime(selectedDate.year, 1, 1);
-          end = DateTime(selectedDate.year + 1, 1, 1);
+          end   = DateTime(selectedDate.year + 1, 1, 1);
           break;
         default:
           return true;
       }
 
       return date.isAfter(start.subtract(const Duration(seconds: 1))) &&
-          date.isBefore(end);
+          date.isBefore(end); // end exclusivo
     }).toList();
+
 
 
     List<Map<String, dynamic>> adjusted = [];
@@ -266,10 +279,16 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         selectedDate: selectedDate,
         accounts: widget.accounts,
         categories: widget.categories,
-        transactions: transactions,
-        accountId: widget.accountId,
-        accountName: widget.accountName,
+        transactions: transactions, // <- asegúrate de que ya estén filtradas por accountId aquí
+        onFilterChange: (date, filter) {
+          setState(() {
+            selectedDate = date;
+            selectedFilter = filter;
+          });
+          _loadTransactions(); // o tu método local que refresca
+        },
       );
+
     } else if (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual") {
       contentView = Padding(
         padding: EdgeInsets.only(bottom: bottomInset),

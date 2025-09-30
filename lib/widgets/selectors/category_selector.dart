@@ -1,6 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import '../utils/app_colors.dart'; // 📌 Importamos AppColors
+import '../../utils/app_colors.dart'; // 📌 Importamos AppColors
 
 class CategorySelector extends StatefulWidget {
   final List<Map<String, dynamic>> categories;

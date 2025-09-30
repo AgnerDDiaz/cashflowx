@@ -6,8 +6,8 @@ import '../utils/database_helper.dart';
 import '../utils/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
 import '../utils/app_colors.dart';
-import '../widgets/account_selector.dart';
-import '../widgets/category_selector.dart';
+import '../widgets/selectors/account_selector.dart';
+import '../widgets/selectors/category_selector.dart';
 import '../screen/select_currency_screen.dart'; // Correcto
 
 class AddTransactionScreen extends StatefulWidget {

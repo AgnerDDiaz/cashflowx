@@ -1,6 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import '../utils/app_colors.dart';
+import '../../utils/app_colors.dart';
 
 class AccountSelector extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;

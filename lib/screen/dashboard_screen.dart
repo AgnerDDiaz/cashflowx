@@ -8,7 +8,7 @@ import '../widgets/annual_summary_view.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
-import '../widgets/date_selector.dart';
+import '../widgets/selectors/date_selector.dart';
 import 'add_transaction_screen.dart';
 import '../utils/app_colors.dart';
 
@@ -43,6 +43,8 @@ class DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> categories = [];
 
   String mainCurrency = 'DOP';
+  String _firstWeekday = 'monday'; // 'monday' | 'sunday'
+
 
   @override
   void initState() {
@@ -54,6 +56,8 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadInitialData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+    _firstWeekday = await SettingsHelper().getFirstWeekday();
+
     final db = DatabaseHelper();
     accounts = await db.getAccounts();
     categories = await db.getCategories();
@@ -155,30 +159,50 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   bool _isTransactionInSelectedRange(DateTime transactionDate) {
+    // Normaliza fecha a medianoche local (evita sorpresas por horas)
+    DateTime tx = DateTime(transactionDate.year, transactionDate.month, transactionDate.day);
+
+    // Helpers para semana según settings
+    DateTime _weekStart(DateTime d) {
+      final startWd = (_firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday; // default monday
+      int delta = (d.weekday - startWd) % 7;
+      if (delta < 0) delta += 7;
+      final localMidnight = DateTime(d.year, d.month, d.day);
+      return localMidnight.subtract(Duration(days: delta));
+    }
+
     DateTime startDate;
     DateTime endDate;
 
-    switch (selectedFilter) {
-      case "weekly":
-        startDate = selectedDate.subtract(Duration(days: selectedDate.weekday - 1));
+    switch (selectedFilter.toLowerCase()) {
+      case "weekly": // si tu DateSelector usa "semanal", añade aquí: case "semanal":
+        startDate = _weekStart(selectedDate);
         endDate = startDate.add(const Duration(days: 7));
         break;
+
       case "monthly":
       case "calendar":
+      case "calendario":
         startDate = DateTime(selectedDate.year, selectedDate.month, 1);
         endDate = DateTime(selectedDate.year, selectedDate.month + 1, 1);
         break;
+
       case "annual":
+      case "anual":
         startDate = DateTime(selectedDate.year, 1, 1);
         endDate = DateTime(selectedDate.year + 1, 1, 1);
         break;
+
       default:
         return false;
     }
 
-    return transactionDate.isAfter(startDate.subtract(const Duration(seconds: 1))) &&
-        transactionDate.isBefore(endDate);
+    // Inclusivo en inicio, EXCLUSIVO en fin: [startDate, endDate)
+    final startsOk = !tx.isBefore(startDate);  // tx >= start
+    final endsOk   = tx.isBefore(endDate);     // tx < end (evita colarse el 29/09)
+    return startsOk && endsOk;
   }
+
 
   Future<List<double>> _buildBalanceValues() async {
     double totalIncome = 0;

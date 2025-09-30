@@ -25,13 +25,16 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6, // NUEVA VERSIÓN para aplicar cambios
+      version: 7, // NUEVA VERSIÓN para aplicar cambios
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    // === SCHEMA ORIGINAL (compat con tus semillas y pantallas) ===
+
+    // ACCOUNTS (schema original)
     await db.execute('''
     CREATE TABLE accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,8 +54,9 @@ class DatabaseHelper {
       visible INTEGER DEFAULT 1,
       include_in_balance INTEGER DEFAULT 1
     );
-    ''');
+  ''');
 
+    // EXCHANGE RATES (igual)
     await db.execute('''
     CREATE TABLE exchange_rates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,8 +65,9 @@ class DatabaseHelper {
       rate REAL NOT NULL,
       last_updated TEXT NOT NULL
     );
-    ''');
+  ''');
 
+    // CATEGORIES (igual)
     await db.execute('''
     CREATE TABLE categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,8 +76,9 @@ class DatabaseHelper {
       parent_id INTEGER DEFAULT NULL,
       FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE CASCADE
     );
-    ''');
+  ''');
 
+    // TRANSACTIONS (schema original; currency con default y check de transfer)
     await db.execute('''
     CREATE TABLE transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +86,7 @@ class DatabaseHelper {
       linked_account_id INTEGER,
       type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
       amount REAL NOT NULL CHECK (amount > 0),
-      currency TEXT NOT NULL DEFAULT 'DOP', -- 👈 AÑADIMOS ESTE CAMPO
+      currency TEXT NOT NULL DEFAULT 'DOP',
       category_id INTEGER DEFAULT NULL,
       date TEXT NOT NULL,
       note TEXT DEFAULT NULL,
@@ -89,9 +95,9 @@ class DatabaseHelper {
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
       CHECK (type <> 'transfer' OR linked_account_id IS NOT NULL)
     );
+  ''');
 
-    ''');
-
+    // PRESUPUESTOS (tabla original)
     await db.execute('''
     CREATE TABLE presupuestos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,39 +105,31 @@ class DatabaseHelper {
       monto_maximo REAL NOT NULL,
       periodo TEXT NOT NULL,
       fecha_creacion TEXT NOT NULL,
-     FOREIGN KEY (categoria_id) REFERENCES categories(id)
+      FOREIGN KEY (categoria_id) REFERENCES categories(id)
     );
-    ''');
-    await db.execute('''
-      CREATE TABLE settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        main_currency TEXT NOT NULL,
-        secondary_currency TEXT DEFAULT 'USD',
-        first_day_of_week TEXT DEFAULT 'Monday',
-        first_day_of_month TEXT DEFAULT '1st',
-        default_view TEXT DEFAULT 'weekly',
-        backup_enabled INTEGER DEFAULT 0,
-        notifications INTEGER DEFAULT 1,
-        theme_mode TEXT DEFAULT 'system',
-        language TEXT DEFAULT 'es',
-        biometric_enabled INTEGER DEFAULT 0,
-        pin_code TEXT DEFAULT NULL,
-        auto_update_rates INTEGER DEFAULT 1,
-        rate_update_interval_days INTEGER DEFAULT 30
-      )
-    ''');
+  ''');
 
+    // SETTINGS (schema original)
     await db.execute('''
-      CREATE TABLE custom_exchange_rates_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        base_currency TEXT NOT NULL,
-        target_currency TEXT NOT NULL,
-        rate REAL NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
+    CREATE TABLE settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      main_currency TEXT NOT NULL,
+      secondary_currency TEXT DEFAULT 'USD',
+      first_day_of_week TEXT DEFAULT 'Monday',
+      first_day_of_month TEXT DEFAULT '1st',
+      default_view TEXT DEFAULT 'weekly',
+      backup_enabled INTEGER DEFAULT 0,
+      notifications INTEGER DEFAULT 1,
+      theme_mode TEXT DEFAULT 'system',
+      language TEXT DEFAULT 'es',
+      biometric_enabled INTEGER DEFAULT 0,
+      pin_code TEXT DEFAULT NULL,
+      auto_update_rates INTEGER DEFAULT 1,
+      rate_update_interval_days INTEGER DEFAULT 30
+    )
+  ''');
 
-    // Insertar settings por defecto
+    // Insert settings por defecto (como antes)
     await db.insert('settings', {
       'main_currency': 'USD',
       'secondary_currency': 'DOP',
@@ -147,26 +145,113 @@ class DatabaseHelper {
       'rate_update_interval_days': 30
     });
 
+    // CUSTOM EXCHANGE RATES LOG (igual)
     await db.execute('''
-      CREATE TABLE currency_names (
-        code TEXT PRIMARY KEY,
-        name TEXT
-      );
-    ''');
+    CREATE TABLE custom_exchange_rates_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      base_currency TEXT NOT NULL,
+      target_currency TEXT NOT NULL,
+      rate REAL NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  ''');
 
+    // CURRENCY NAMES (igual)
+    await db.execute('''
+    CREATE TABLE currency_names (
+      code TEXT PRIMARY KEY,
+      name TEXT
+    );
+  ''');
 
+    // === SEMILLAS (igual que antes) ===
     await insertCategoriesAndSubcategories(db);
     await insertDefaultAccounts(db);
     await insertTestTransactions(db);
+
+    // Nombres de divisas base
     await db.insert('currency_names', {'code': 'USD', 'name': 'United States Dollar'});
     await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'});
     await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'});
     await db.insert('currency_names', {'code': 'JPY', 'name': 'Japanese Yen'});
 
+    // === NUEVO DE v7 (mantener añadidos) ===
 
+    // SCHEDULED TRANSACTIONS (nueva)
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS scheduled_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      linked_account_id INTEGER,
+      type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+      amount REAL NOT NULL CHECK (amount > 0),
+      currency TEXT NOT NULL DEFAULT 'DOP',
+      category_id INTEGER,
+      start_date TEXT NOT NULL,
+      frequency TEXT NOT NULL,
+      next_run TEXT NOT NULL,
+      note TEXT,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );
+  ''');
+
+    // ÍNDICES útiles
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date);");
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_account ON transactions(account_id);");
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_linked ON transactions(linked_account_id);");
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id);");
   }
 
+
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+
+    // --- v7 migration additions ---
+    if (oldVersion < 7) {
+      await db.execute('''
+    CREATE TABLE IF NOT EXISTS scheduled_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      linked_account_id INTEGER,
+      type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+      amount REAL NOT NULL CHECK (amount > 0),
+      currency TEXT NOT NULL DEFAULT 'DOP',
+      category_id INTEGER,
+      start_date TEXT NOT NULL,
+      frequency TEXT NOT NULL,
+      next_run TEXT NOT NULL,
+      note TEXT,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );
+  ''');
+
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date);");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_account ON transactions(account_id);");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_linked ON transactions(linked_account_id);");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id);");
+
+      // Normaliza first_day_of_week para que SettingsHelper funcione con monday/sunday
+      try {
+        await db.execute('''
+      UPDATE settings
+      SET first_day_of_week = 
+        CASE LOWER(first_day_of_week)
+          WHEN 'sunday' THEN 'sunday'
+          WHEN 'monday' THEN 'monday'
+          WHEN 'lunes' THEN 'monday'
+          WHEN 'domingo' THEN 'sunday'
+          ELSE 'monday'
+        END
+      WHERE id = 1;
+    ''');
+      } catch (_) {}
+    }
+
+    // --- end v7 migration ---
     if (oldVersion < 6) {
       await db.execute("ALTER TABLE settings ADD COLUMN secondary_currency TEXT DEFAULT 'USD';");
       await db.execute("ALTER TABLE settings ADD COLUMN theme_mode TEXT DEFAULT 'system';");
@@ -498,7 +583,7 @@ class DatabaseHelper {
     ];
 
     for (var transaction in testTransactions) {
-        await db.insert('transactions', transaction);
+      await db.insert('transactions', transaction);
     }
   }
 
@@ -707,12 +792,20 @@ class DatabaseHelper {
   Future<List<String>> getAllCurrencies() async {
     final db = await database;
     final result = await db.rawQuery('''
-    SELECT DISTINCT base_currency FROM exchange_rates
-    UNION
-    SELECT DISTINCT target_currency FROM exchange_rates
-  ''');
+      SELECT code FROM currency_names
+      UNION
+      SELECT base_currency AS code FROM exchange_rates
+      UNION
+      SELECT target_currency AS code FROM exchange_rates
+    ''');
 
-    return result.map((row) => row['base_currency'] as String).toList();
+    final set = <String>{};
+    for (final row in result) {
+      final c = (row['code'] as String?)?.trim();
+      if (c != null && c.isNotEmpty) set.add(c);
+    }
+    final list = set.toList()..sort();
+    return list;
   }
 
 
@@ -963,7 +1056,7 @@ class DatabaseHelper {
         'rate': newRate,
         'last_updated': now,
       },
-      where: 'from_currency = ? AND to_currency = ?',
+      where: 'base_currency = ? AND target_currency = ?',
       whereArgs: [fromCurrency, toCurrency],
     );
   }
@@ -993,5 +1086,19 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'cashflowx.db');
     await deleteDatabase(path);
     print("Base de datos eliminada.");
+  }
+
+
+  /// Obtener transacciones en rango [start, end) (fin EXCLUSIVO)
+  Future<List<Map<String, dynamic>>> getTransactionsInRange(DateTime start, DateTime endExclusive) async {
+    final db = await database;
+    final s = start.toIso8601String();
+    final e = endExclusive.toIso8601String();
+    return db.query(
+      'transactions',
+      where: 'date >= ? AND date < ?',
+      whereArgs: [s, e],
+      orderBy: 'date DESC',
+    );
   }
 }
