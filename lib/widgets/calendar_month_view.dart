@@ -131,13 +131,14 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
         continue;
       }
 
+
       final dayKey = DateFormat('yyyy-MM-dd').format(d);
       final type = (t['type'] as String?) ?? '';
       final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
       final currency = (t['currency'] as String?) ?? _mainCurrency;
 
-      final converted = await ExchangeRateService.localConvert(
-          amount, currency, _mainCurrency);
+      final converted =
+      await ExchangeRateService.localConvert(amount, currency, _mainCurrency);
 
       _dailySummary.putIfAbsent(dayKey, () => _DaySummary.zero());
       if (type == 'income') {
@@ -153,19 +154,24 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
     if (mounted) setState(() {});
   }
 
+  List<String> _weekdayLabels(BuildContext context) {
+    // Usamos anclas con día conocido para evitar trucos raros:
+    // 2024-01-01 fue Lunes; 2023-12-31 fue Domingo.
+    final String locale = context.locale.toString();
+    final DateTime anchor = (_firstWeekday == 'sunday')
+        ? DateTime(2023, 12, 31) // Domingo
+        : DateTime(2024, 1, 1);   // Lunes
+
+    return List<String>.generate(
+      7,
+          (i) => DateFormat.E(locale).format(anchor.add(Duration(days: i))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Etiquetas de días según primer día de semana
-    final locale = context.locale.toString();
-    final startW =
-    (_firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
-    final weekdayOrder =
-    List<int>.generate(7, (i) => ((startW + i - 1) % 7) + 1);
-    final weekdayLabels = weekdayOrder
-        .map((w) => DateFormat.E(locale).format(
-      DateTime(2024, 9, w == 7 ? 1 : w), // mapeo estable
-    ))
-        .toList();
+    final weekdayLabels = _weekdayLabels(context);
+
 
     return Column(
       children: [
@@ -215,19 +221,25 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
 
     // Paleta basada en el tema para evitar “blancos”
     final Color baseInMonth = Theme.of(context).cardColor;
-    final Color baseOutMonth = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.04);
+    final Color baseOutMonth =
+    isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04);
 
     // Días sin movimientos usan un fondo un poco más apagado
     final bool empty = summary.isEmpty;
     final Color bgColor = !isCurrentMonth
         ? baseOutMonth
         : (empty
-        ? (isDark
-        ? baseInMonth.withOpacity(0.65)
-        : baseInMonth.withOpacity(0.85))
+        ? (isDark ? baseInMonth.withOpacity(0.65) : baseInMonth.withOpacity(0.85))
         : baseInMonth);
+
+    // Color del balance por signo
+    final double bal = summary.balance;
+    final Color balColor = bal > 0
+        ? AppColors.ingresoColor
+        : (bal < 0
+        ? AppColors.gastoColor
+        : Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6) ??
+        Colors.grey);
 
     return InkWell(
       onTap: () {
@@ -268,24 +280,14 @@ class _CalendarMonthViewState extends State<CalendarMonthView> {
               ),
             ),
             const Spacer(),
-            // Sumario (ingreso / gasto / balance)
-            if (!summary.isEmpty) ...[
+            // ===== SOLO BALANCE (sin símbolo), color por signo =====
+            if (!summary.isEmpty)
               _LineAmount(
-                amount: summary.income,
+                amount: bal,
                 currency: _mainCurrency,
-                color: AppColors.ingresoColor,
+                color: balColor,
+                fontSize: 10, // baja a 9 si lo quieres aún más compacto
               ),
-              _LineAmount(
-                amount: summary.expense,
-                currency: _mainCurrency,
-                color: AppColors.gastoColor,
-              ),
-              _LineAmount(
-                amount: summary.balance,
-                currency: _mainCurrency,
-                color: Theme.of(context).textTheme.bodySmall?.color,
-              ),
-            ],
           ],
         ),
       ),
@@ -325,28 +327,35 @@ class _WeekHeader extends StatelessWidget {
 
 class _LineAmount extends StatelessWidget {
   final double amount;
-  final String currency;
+  final String currency; // se mantiene por compatibilidad
   final Color? color;
+  final double fontSize;
 
   const _LineAmount({
     required this.amount,
     required this.currency,
     this.color,
+    this.fontSize = 10, // más pequeño por defecto
   });
 
   @override
   Widget build(BuildContext context) {
     if (amount == 0) return const SizedBox.shrink();
-    final formatter =
-    NumberFormat.currency(locale: 'en_US', symbol: '$currency ');
+
+    final f = NumberFormat.decimalPattern();
+    f.minimumFractionDigits = 0;
+    f.maximumFractionDigits = 0;
+
     return Padding(
-      padding: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.only(top: 1.5),
       child: Text(
-        formatter.format(amount),
+        f.format(amount), // solo número, sin símbolo
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w700,
+          fontSize: fontSize,
+          height: 1.0,
           color: color,
         ),
       ),
