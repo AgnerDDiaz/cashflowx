@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../utils/app_colors.dart';
-import '../utils/database_helper.dart';
-import '../utils/exchange_rate_service.dart';
+import '../services/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
+
 import '../widgets/annual_summary_view.dart';
 import '../widgets/balance_section.dart';
 import '../widgets/calendar_month_view.dart';
 import '../widgets/transaction_item.dart';
 import '../widgets/selectors/date_selector.dart';
 import 'add_transaction_screen.dart';
+
+// Repos
+import '../repositories/transactions_repository.dart';
+import '../repositories/accounts_repository.dart';
+import '../repositories/categories_repository.dart';
 
 class AccountDetailScreen extends StatefulWidget {
   final int accountId;
@@ -32,6 +38,10 @@ class AccountDetailScreen extends StatefulWidget {
 }
 
 class _AccountDetailScreenState extends State<AccountDetailScreen> {
+  final _txRepo = TransactionsRepository();
+  final _accRepo = AccountsRepository();
+  final _catRepo = CategoriesRepository();
+
   List<Map<String, dynamic>> transactions = [];
   double income = 0.0;
   double expenses = 0.0;
@@ -63,91 +73,108 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     _loadTransactions();
   }
 
-  Future<String> _getFirstWeekday() async =>
-      (await SettingsHelper().getFirstWeekday());
+  Future<String> _getFirstWeekday() async => (await SettingsHelper().getFirstWeekday());
+
   DateTime _startOfWeek(DateTime d, String firstWeekday) {
     final startW = (firstWeekday == 'sunday') ? DateTime.sunday : DateTime.monday;
     final back = (d.weekday - startW + 7) % 7;
     return DateTime(d.year, d.month, d.day).subtract(Duration(days: back));
   }
 
+  /// Devuelve (start, endExclusive) según filtro actual.
+  Future<(String fromIso, String toIso)> _currentRangeIso() async {
+    final firstW = await _getFirstWeekday();
 
+    late DateTime start;
+    late DateTime end;
+
+    switch (selectedFilter.toLowerCase()) {
+      case 'weekly':
+      case 'semanal':
+        start = _startOfWeek(selectedDate, firstW);
+        end = start.add(const Duration(days: 7));
+        break;
+      case 'monthly':
+      case 'calendar':
+      case 'calendario':
+        start = DateTime(selectedDate.year, selectedDate.month, 1);
+        end = DateTime(selectedDate.year, selectedDate.month + 1, 1);
+        break;
+      case 'annual':
+      case 'anual':
+        start = DateTime(selectedDate.year, 1, 1);
+        end = DateTime(selectedDate.year + 1, 1, 1);
+        break;
+      default:
+        start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        end = start.add(const Duration(days: 1));
+        break;
+    }
+
+    // ISO yyyy-MM-dd
+    String iso(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+    return (iso(start), iso(end.subtract(const Duration(days: 0)))); // usamos <= endIso en repo
+  }
 
   Future<void> _loadData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'USD';
-    final db = DatabaseHelper();
-    accounts = await db.getAccounts();
-    categories = await db.getCategories();
+
+    // Cargamos cuentas/categorías como Maps para no romper los widgets existentes
+    final accModels = await _accRepo.getAll();
+    accounts = accModels.map((a) => a.toMap()).toList();
+
+    final catModels = await _catRepo.getAll();
+    categories = catModels.map((c) => c.toMap()).toList();
+
     await _loadTransactions();
   }
 
   Future<void> _loadTransactions() async {
-    final db = DatabaseHelper();
-    final result = await db.getTransactionsByAccount(widget.accountId);
+    final range = await _currentRangeIso();
+    final fromIso = range.$1;
+    final toIso = range.$2;
+
+    // Trae transacciones de la cuenta en el rango
+    final txModels = await _txRepo.byAccount(
+      widget.accountId,
+      fromIso: fromIso,
+      toIso: toIso,
+      orderBy: 'date DESC, id DESC',
+    );
 
     double totalIncome = 0.0;
     double totalExpenses = 0.0;
 
-    final firstW = await _getFirstWeekday();
+    // Adaptamos a Map para reusar TransactionItem existente
+    final adjusted = <Map<String, dynamic>>[];
 
-    final filtered = result.where((tx) {
-      final date = DateTime.parse(tx['date']);
+    for (final t in txModels) {
+      final txMap = t.toMap();
+      final amount = t.amount;
+      final converted = await ExchangeRateService.localConvert(amount, t.currency, mainCurrency);
+      double convertedAmount = converted;
 
-      late DateTime start;
-      late DateTime end;
-
-      switch (selectedFilter) {
-        case 'weekly':
-          start = _startOfWeek(selectedDate, firstW);
-          end   = start.add(const Duration(days: 7)); // ← END EXCLUSIVO, 7 días completos
-          break;
-        case 'monthly':
-        case 'calendar':
-          start = DateTime(selectedDate.year, selectedDate.month, 1);
-          end   = DateTime(selectedDate.year, selectedDate.month + 1, 1);
-          break;
-        case 'annual':
-          start = DateTime(selectedDate.year, 1, 1);
-          end   = DateTime(selectedDate.year + 1, 1, 1);
-          break;
-        default:
-          return true;
-      }
-
-      return date.isAfter(start.subtract(const Duration(seconds: 1))) &&
-          date.isBefore(end); // end exclusivo
-    }).toList();
-
-
-
-    List<Map<String, dynamic>> adjusted = [];
-
-    for (var tx in filtered) {
-      double amount = (tx['amount'] as num).toDouble();
-      double convertedAmount = await ExchangeRateService.localConvert(
-        amount,
-        tx['currency'],
-        mainCurrency,
-      );
-
-      // Lógica especial para transferencias
-      if (tx['type'] == 'transfer') {
-        if (tx['account_id'] == widget.accountId) {
-          totalExpenses += convertedAmount;
-          convertedAmount = -convertedAmount;
-        } else if (tx['linked_account_id'] == widget.accountId) {
-          totalIncome += convertedAmount;
+      if (t.type == 'transfer') {
+        if (t.accountId == widget.accountId) {
+          totalExpenses += converted;
+          convertedAmount = -converted;
+        } else if (t.linkedAccountId == widget.accountId) {
+          totalIncome += converted;
         }
-      } else if (tx['type'] == 'income') {
-        totalIncome += convertedAmount;
-      } else if (tx['type'] == 'expense') {
-        totalExpenses += convertedAmount;
-        convertedAmount = -convertedAmount;
+      } else if (t.type == 'income') {
+        totalIncome += converted;
+      } else if (t.type == 'expense') {
+        totalExpenses += converted;
+        convertedAmount = -converted;
       }
 
-      adjusted.add({...tx, 'convertedAmount': convertedAmount});
+      adjusted.add({
+        ...txMap,
+        'convertedAmount': convertedAmount,
+      });
     }
 
+    if (!mounted) return;
     setState(() {
       transactions = adjusted;
       income = totalIncome;
@@ -155,46 +182,61 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     });
   }
 
-  Future<String> _getBalanceText(List<Map<String, dynamic>> transactions) async {
-    double income = 0;
-    double expense = 0;
+  Future<String> _getBalanceText(List<Map<String, dynamic>> list) async {
+    double inSum = 0;
+    double outSum = 0;
 
-    for (final t in transactions) {
-      double amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
-      String currency = t['currency'] ?? mainCurrency;
-      double converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
+    for (final t in list) {
+      final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+      final currency = t['currency'] as String? ?? mainCurrency;
+      final converted = await ExchangeRateService.localConvert(amount, currency, mainCurrency);
 
       if (t['type'] == 'income') {
-        income += converted;
+        inSum += converted;
       } else if (t['type'] == 'expense') {
-        expense += converted;
+        outSum += converted;
       } else if (t['type'] == 'transfer') {
-        // Si es cuenta que envió dinero, es gasto
         if (t['account_id'] == widget.accountId) {
-          expense += converted;
-        }
-        // Si es cuenta que recibió, es ingreso
-        else if (t['linked_account_id'] == widget.accountId) {
-          income += converted;
+          outSum += converted;
+        } else if (t['linked_account_id'] == widget.accountId) {
+          inSum += converted;
         }
       }
     }
 
-    double balance = income - expense;
     final formatter = NumberFormat.currency(locale: 'en_US', symbol: '$mainCurrency ');
-    return formatter.format(balance);
+    return formatter.format(inSum - outSum);
   }
 
+  Color _getBalanceColor(List<Map<String, dynamic>> list) {
+    double inSum = 0;
+    double outSum = 0;
+
+    for (final t in list) {
+      final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+      if (t['type'] == 'income') {
+        inSum += amount;
+      } else if (t['type'] == 'expense') {
+        outSum += amount;
+      } else if (t['type'] == 'transfer') {
+        // cuenta que envía = gasto; que recibe = ingreso
+        if (t['account_id'] == widget.accountId) {
+          outSum += amount;
+        } else if (t['linked_account_id'] == widget.accountId) {
+          inSum += amount;
+        }
+      }
+    }
+
+    return (inSum - outSum) >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
+  }
 
   Widget _buildTransactionList() {
-    Map<String, List<Map<String, dynamic>>> grouped = {};
+    final grouped = <String, List<Map<String, dynamic>>>{};
 
-    for (var t in transactions) {
-      final dateKey = (t['date'] ?? '').split(' ')[0];
-      if (!grouped.containsKey(dateKey)) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey]!.add(t);
+    for (final t in transactions) {
+      final dateKey = (t['date'] ?? '').toString().split(' ').first;
+      grouped.putIfAbsent(dateKey, () => []).add(t);
     }
 
     if (transactions.isEmpty) {
@@ -202,11 +244,12 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.all(8),
       children: grouped.entries.map((entry) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header fecha con balance del día
             GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -252,15 +295,16 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                 ),
               ),
             ),
+            // Items
             ...entry.value.map((tx) {
               return TransactionItem(
                 transaction: tx,
                 accounts: accounts,
                 categories: categories,
                 onTransactionUpdated: _loadTransactions,
-                currentAccountId: widget.accountId, // NUEVO
+                currentAccountId: widget.accountId,
               );
-            }).toList(),
+            }),
           ],
         );
       }).toList(),
@@ -269,27 +313,25 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double totalBalance = income - expenses;
+    final totalBalance = income - expenses;
     final bottomInset = MediaQuery.of(context).viewPadding.bottom + 80;
 
-    Widget contentView;
-
-    if (selectedFilter.toLowerCase() == "calendario" || selectedFilter.toLowerCase() == "calendar") {
+    late final Widget contentView;
+    if (selectedFilter.toLowerCase() == 'calendario' || selectedFilter.toLowerCase() == 'calendar') {
       contentView = CalendarMonthView(
         selectedDate: selectedDate,
         accounts: widget.accounts,
         categories: widget.categories,
-        transactions: transactions, // <- asegúrate de que ya estén filtradas por accountId aquí
+        transactions: transactions,
         onFilterChange: (date, filter) {
           setState(() {
             selectedDate = date;
             selectedFilter = filter;
           });
-          _loadTransactions(); // o tu método local que refresca
+          _loadTransactions();
         },
       );
-
-    } else if (selectedFilter.toLowerCase() == "anual" || selectedFilter.toLowerCase() == "annual") {
+    } else if (selectedFilter.toLowerCase() == 'anual' || selectedFilter.toLowerCase() == 'annual') {
       contentView = Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
         child: AnnualSummaryView(
@@ -308,7 +350,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
           },
         ),
       );
-
     } else {
       contentView = Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
@@ -318,13 +359,11 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context, true); // Devuelve true al cerrar
-        return false; // Previene pop automático
+        Navigator.pop(context, true);
+        return false;
       },
-      child:Scaffold(
-        appBar: AppBar(
-          title: Text(widget.accountName),
-        ),
+      child: Scaffold(
+        appBar: AppBar(title: Text(widget.accountName)),
         body: Column(
           children: [
             DateSelector(
@@ -347,7 +386,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
               mainCurrency: mainCurrency,
             ),
             const SizedBox(height: 10),
-            Expanded(child: contentView,),
+            Expanded(child: contentView),
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -370,35 +409,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
           shape: const CircleBorder(),
           child: const Icon(Icons.add, color: Colors.white),
           backgroundColor: Theme.of(context).primaryColor,
-
         ),
-      )
+      ),
     );
   }
-
-  Color _getBalanceColor(List<Map<String, dynamic>> transactions) {
-    double income = 0;
-    double expense = 0;
-
-    for (final t in transactions) {
-      double amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
-
-      if (t['type'] == 'income') {
-        income += amount;
-      } else if (t['type'] == 'expense') {
-        expense += amount;
-      } else if (t['type'] == 'transfer') {
-        if (widget.accountId != null) {
-          if (t['account_id'] == widget.accountId) {
-            expense += amount;
-          } else if (t['linked_account_id'] == widget.accountId) {
-            income += amount;
-          }
-        }
-      }
-    }
-
-    return (income - expense) >= 0 ? AppColors.ingresoColor : AppColors.gastoColor;
-  }
-
 }

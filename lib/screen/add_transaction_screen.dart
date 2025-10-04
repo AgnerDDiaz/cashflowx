@@ -2,17 +2,20 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../utils/database_helper.dart';
-import '../utils/exchange_rate_service.dart';
+
+import '../services/exchange_rate_service.dart';
+import '../services/transaction_service.dart';
+import '../repositories/exchange_rates_repository.dart';
 import '../utils/settings_helper.dart';
 import '../utils/app_colors.dart';
+
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
-import '../screen/select_currency_screen.dart'; // Correcto
+import '../screen/select_currency_screen.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  final List<Map<String, dynamic>> accounts;
-  final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> accounts;   // seguimos usando Map para no romper selectores
+  final List<Map<String, dynamic>> categories; // idem
 
   const AddTransactionScreen({
     Key? key,
@@ -26,15 +29,19 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   DateTime selectedDate = DateTime.now();
+
   final TextEditingController amountController = TextEditingController();
   final TextEditingController noteController = TextEditingController();
-  final DatabaseHelper _dbHelper = DatabaseHelper();
-  final ExchangeRateService _exchangeRateService = ExchangeRateService();
+
+  final _exchangeRateService = ExchangeRateService();
+  final _txService = TransactionService();
+  final _ratesRepo = ExchangeRatesRepository();
 
   String selectedType = 'expense';
   int? selectedAccount;
   int? selectedCategory;
   int? linkedAccount;
+
   String selectedCurrency = 'DOP';
   double? convertedAmount;
   List<String> availableCurrencies = [];
@@ -45,7 +52,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     super.initState();
     amountController.addListener(_updateConvertedAmount);
 
-    // Leer argumentos de la ruta
+    // Leer argumentos de la ruta y precargar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
@@ -59,38 +66,53 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       }
 
       _updateConvertedAmount();
-      setState(() {}); // Refrescar UI con valores precargados
+      setState(() {}); // refresca UI
       _loadInitialData();
     });
   }
 
   Future<void> _loadInitialData() async {
-    mainCurrency = await SettingsHelper().getMainCurrency();
-    final currencies = await _dbHelper.getAllCurrenciesCodes();
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+
+    // Monedas disponibles (de la tabla exchange_rates)
+    List<String> codes = await _ratesRepo.allBaseCurrencyCodes();
+    codes = codes.toSet().toList(); // únicos
+    // Aseguramos presencia de principales
+    for (final must in [mainCurrency!, 'USD', 'DOP']) {
+      if (!codes.contains(must)) codes.add(must);
+    }
 
     setState(() {
-      selectedCurrency = mainCurrency ?? 'DOP';
-      availableCurrencies = currencies.take(4).toList();
+      selectedCurrency = mainCurrency!;
+      availableCurrencies = codes.take(6).toList();
     });
 
     _updateConvertedAmount();
   }
 
   void _updateConvertedAmount() async {
-    if (selectedAccount == null || amountController.text.isEmpty || mainCurrency == null) {
-      setState(() {
-        convertedAmount = null;
-      });
+    if (amountController.text.isEmpty || mainCurrency == null) {
+      setState(() => convertedAmount = null);
       return;
     }
 
     try {
-      final rate = await _exchangeRateService.getExchangeRate(context, selectedCurrency, mainCurrency!);
+      final amount = double.tryParse(amountController.text) ?? 0.0;
+      if (amount <= 0) {
+        setState(() => convertedAmount = null);
+        return;
+      }
+      final rate = await _exchangeRateService.getExchangeRate(
+        selectedCurrency,
+        mainCurrency!,
+        context: context,
+      );
       setState(() {
-        convertedAmount = (double.tryParse(amountController.text) ?? 0.0) * rate;
+        convertedAmount = amount * rate;
       });
     } catch (e) {
-      print('Error converting amount: $e');
+      // Si falla, deja el preview vacío
+      setState(() => convertedAmount = null);
     }
   }
 
@@ -106,18 +128,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
-    // Esto asegura que solo se setea una vez al inicio
+    // Solo la primera vez
     if (args != null && selectedAccount == null) {
-      if (args.containsKey('date')) {
-        selectedDate = args['date'];
-      }
-      if (args.containsKey('account_id')) {
-        selectedAccount = args['account_id'];
-      }
+      if (args.containsKey('date')) selectedDate = args['date'];
+      if (args.containsKey('account_id')) selectedAccount = args['account_id'];
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text("add_transaction".tr(), style: Theme.of(context).textTheme.titleLarge)),
+      appBar: AppBar(
+        title: Text("add_transaction".tr(), style: Theme.of(context).textTheme.titleLarge),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -127,6 +147,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             const SizedBox(height: 15),
             _buildDateSelector(),
             const SizedBox(height: 15),
+
+            // Cuenta origen
             AccountSelector(
               accounts: widget.accounts,
               initialSelectedId: selectedAccount,
@@ -134,31 +156,38 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 setState(() {
                   selectedAccount = selectedId;
                   linkedAccount = null;
-                  _updateConvertedAmount();
                 });
+                _updateConvertedAmount();
               },
             ),
             const SizedBox(height: 15),
+
+            // Cuenta destino (solo transfer)
             if (selectedType == 'transfer')
               AccountSelector(
-                accounts: widget.accounts.where((account) => account['id'] != selectedAccount).toList(),
+                accounts: widget.accounts.where((a) => a['id'] != selectedAccount).toList(),
                 onSelect: (selectedId) => setState(() => linkedAccount = selectedId),
               ),
+
+            // Categoría (no transfer)
             if (selectedType != 'transfer')
               CategorySelector(
                 categories: widget.categories,
                 transactionType: selectedType,
                 onSelect: (selectedId) => setState(() => selectedCategory = selectedId),
               ),
+
             const SizedBox(height: 15),
+
+            // Monto + Moneda
             Row(
               children: [
                 Expanded(
                   flex: 3,
                   child: TextField(
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     controller: amountController,
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+([.]\d{0,2})?'))],
                     decoration: InputDecoration(
                       labelText: "amount".tr(),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
@@ -172,6 +201,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
               ],
             ),
+
             if (convertedAmount != null && mainCurrency != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -180,7 +210,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   style: TextStyle(color: Colors.grey[700], fontSize: 13),
                 ),
               ),
+
             const SizedBox(height: 15),
+
+            // Nota
             TextField(
               controller: noteController,
               decoration: InputDecoration(
@@ -188,7 +221,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
               ),
             ),
+
             const SizedBox(height: 25),
+
+            // Guardar
             ElevatedButton(
               onPressed: _saveTransaction,
               style: ElevatedButton.styleFrom(backgroundColor: _getButtonColor()),
@@ -203,26 +239,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Widget _buildCurrencyDropdown() {
-    final List<DropdownMenuItem<String>> items = [
-      ...availableCurrencies.map((currencyCode) => DropdownMenuItem(
-        value: currencyCode,
-        child: Text(currencyCode, overflow: TextOverflow.ellipsis),
-      )),
-      DropdownMenuItem(
-        value: 'other',
-        child: Text("other_currency".tr()),
-      ),
+    final items = <DropdownMenuItem<String>>[
+      ...availableCurrencies.map((code) => DropdownMenuItem(value: code, child: Text(code))),
+      DropdownMenuItem(value: 'other', child: Text("other_currency".tr())),
       if (!availableCurrencies.contains(selectedCurrency) && selectedCurrency != 'other')
-        DropdownMenuItem(
-          value: selectedCurrency,
-          child: Text(selectedCurrency, overflow: TextOverflow.ellipsis),
-        ),
+        DropdownMenuItem(value: selectedCurrency, child: Text(selectedCurrency)),
     ];
 
     return DropdownButtonFormField<String>(
       value: selectedCurrency,
       items: items,
       onChanged: (value) async {
+        if (value == null) return;
         if (value == 'other') {
           final selected = await Navigator.push(
             context,
@@ -233,10 +261,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             _updateConvertedAmount();
           }
         } else {
-          setState(() {
-            selectedCurrency = value!;
-            _updateConvertedAmount();
-          });
+          setState(() => selectedCurrency = value);
+          _updateConvertedAmount();
         }
       },
       decoration: InputDecoration(
@@ -247,19 +273,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-
   Widget _buildDateSelector() {
     return GestureDetector(
       onTap: () async {
-        DateTime? pickedDate = await showDatePicker(
+        final picked = await showDatePicker(
           context: context,
           initialDate: selectedDate,
           firstDate: DateTime(2000),
           lastDate: DateTime(2100),
         );
-        if (pickedDate != null) {
-          setState(() => selectedDate = pickedDate);
-        }
+        if (picked != null) setState(() => selectedDate = picked);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -281,11 +304,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget _buildTransactionTypeSelector() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: ['expenses'.tr(), 'income'.tr(), 'transfer'.tr()].map((type) {
-        bool isSelected = _mapTranslatedTypeToDB(type) == selectedType;
+      children: ['expenses'.tr(), 'income'.tr(), 'transfer'.tr()].map((t) {
+        final dbType = _mapTranslatedTypeToDB(t);
+        final isSelected = dbType == selectedType;
 
         Color typeColor;
-        switch (_mapTranslatedTypeToDB(type)) {
+        switch (dbType) {
           case 'expense':
             typeColor = Colors.red;
             break;
@@ -300,11 +324,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         }
 
         return GestureDetector(
-          onTap: () => _changeType(type),
+          onTap: () => _changeType(t),
           child: Column(
             children: [
               Text(
-                type,
+                t,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -312,11 +336,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
               ),
               if (isSelected)
-                Container(
-                  height: 3,
-                  width: 50,
-                  color: typeColor,
-                ),
+                Container(height: 3, width: 50, color: typeColor),
             ],
           ),
         );
@@ -360,20 +380,60 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       return;
     }
 
-    double amount = double.tryParse(amountController.text) ?? 0.0;
+    final amount = double.tryParse(amountController.text) ?? 0.0;
+    final dateIso = DateFormat('yyyy-MM-dd').format(selectedDate);
+    final note = noteController.text.isEmpty ? null : noteController.text;
 
-    Map<String, dynamic> transaction = {
-      'account_id': selectedAccount,
-      'linked_account_id': selectedType == 'transfer' ? linkedAccount : null,
-      'type': selectedType,
-      'amount': amount,
-      'currency': selectedCurrency,
-      'category_id': selectedType == 'transfer' ? null : selectedCategory,
-      'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-      'note': noteController.text.isEmpty ? null : noteController.text,
-    };
+    try {
+      if (selectedType == 'transfer') {
+        if (linkedAccount == null || linkedAccount == selectedAccount) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("select_destination_account".tr())),
+          );
+          return;
+        }
+        await _txService.addTransfer(
+          amount: amount,
+          fromAccountId: selectedAccount!,
+          toAccountId: linkedAccount!,
+          currency: selectedCurrency,
+          dateIso: dateIso,
+          note: note,
+        );
+      } else if (selectedType == 'income') {
+        await _txService.addIncome(
+          accountId: selectedAccount!,
+          amount: amount,
+          currency: selectedCurrency,
+          categoryId: selectedCategory,
+          dateIso: dateIso,
+          note: note,
+        );
+      } else {
+        // expense
+        if (selectedCategory == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("select_category".tr())),
+          );
+          return;
+        }
+        await _txService.addExpense(
+          accountId: selectedAccount!,
+          amount: amount,
+          currency: selectedCurrency,
+          categoryId: selectedCategory,
+          dateIso: dateIso,
+          note: note,
+        );
+      }
 
-    await _dbHelper.addTransaction(transaction);
-    Navigator.pop(context, true);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("error_saving_transaction".tr(args: [e.toString()]))),
+      );
+    }
   }
 }

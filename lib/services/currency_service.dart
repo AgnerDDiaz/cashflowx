@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'database_helper.dart'; // Para guardar el nuevo tipo de cambio si hace falta
+import '../utils/database_helper.dart'; // Para guardar el nuevo tipo de cambio si hace falta
 
 class CurrencyService {
   static final CurrencyService _instance = CurrencyService._internal();

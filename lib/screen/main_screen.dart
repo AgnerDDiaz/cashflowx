@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart';
-import '../utils/database_helper.dart';
+
+// 🔁 Nueva arquitectura: usamos repos en vez de DatabaseHelper
+import '../repositories/accounts_repository.dart';
+import '../repositories/categories_repository.dart';
+import '../repositories/transactions_repository.dart';
+
+// Modelos para mapear a Map<String,dynamic>
+import '../models/account.dart';
+import '../models/category.dart' as model;
+import '../models/transaction.dart';
+
 import 'dashboard_screen.dart';
 import 'reports_screen.dart';
 import 'accounts_screen.dart';
@@ -24,9 +34,14 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+
   late List<Map<String, dynamic>> _accounts;
   late List<Map<String, dynamic>> _categories;
   late List<Map<String, dynamic>> _transactions;
+
+  final _accountsRepo = AccountsRepository();
+  final _categoriesRepo = CategoriesRepository();
+  final _txRepo = TransactionsRepository();
 
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
   final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey();
@@ -48,9 +63,7 @@ class _MainScreenState extends State<MainScreen> {
       if (args.containsKey('filter') && args.containsKey('date')) {
         DashboardScreen.lastSelectedFilter = args['filter'];
         DashboardScreen.lastSelectedDate = args['date'];
-
         _currentIndex = 0;
-
         WidgetsBinding.instance.addPostFrameCallback((_) {
           fetchData();
         });
@@ -81,16 +94,24 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  /// 🔄 Carga las listas usando los repos y las mantiene como List<Map> para no romper otras pantallas.
   Future<void> fetchData() async {
-    final db = DatabaseHelper();
-    final updatedAccounts = await db.getAccounts();
-    final updatedTransactions = await db.getTransactions();
-    final updatedCategories = await db.getCategories();
+    // Accounts
+    final accs = await _accountsRepo.getAll(); // List<Account>
+    final accMaps = accs.map<Map<String, dynamic>>((Account a) => a.toMap()).toList();
+
+    // Categories
+    final cats = await _categoriesRepo.getAll(); // List<model.Category>
+    final catMaps = cats.map<Map<String, dynamic>>((model.Category c) => c.toMap()).toList();
+
+    // Transactions
+    final txs = await _txRepo.all(); // List<AppTransaction>
+    final txMaps = txs.map<Map<String, dynamic>>((AppTransaction t) => t.toMap()).toList();
 
     setState(() {
-      _accounts = updatedAccounts;
-      _transactions = updatedTransactions;
-      _categories = updatedCategories;
+      _accounts = accMaps;
+      _categories = catMaps;
+      _transactions = txMaps;
     });
   }
 
@@ -104,7 +125,7 @@ class _MainScreenState extends State<MainScreen> {
         transactions: _transactions,
       ),
       ReportsScreen(),
-      const SizedBox(),
+      const SizedBox(), // slot para el FAB
       AccountsScreen(
         key: _accountsKey,
       ),
@@ -121,20 +142,32 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: Icon(Icons.home, color: _currentIndex == 0 ? Theme.of(context).primaryColor : Colors.grey),
+              icon: Icon(
+                Icons.home,
+                color: _currentIndex == 0 ? Theme.of(context).primaryColor : Colors.grey,
+              ),
               onPressed: () => _onTabTapped(0),
             ),
             IconButton(
-              icon: Icon(Icons.bar_chart, color: _currentIndex == 1 ? Theme.of(context).primaryColor : Colors.grey),
+              icon: Icon(
+                Icons.bar_chart,
+                color: _currentIndex == 1 ? Theme.of(context).primaryColor : Colors.grey,
+              ),
               onPressed: () => _onTabTapped(1),
             ),
-            const SizedBox(width: 40), // Espacio para FAB
+            const SizedBox(width: 40), // Espacio para el FAB
             IconButton(
-              icon: Icon(Icons.account_balance_wallet, color: _currentIndex == 3 ? Theme.of(context).primaryColor : Colors.grey),
+              icon: Icon(
+                Icons.account_balance_wallet,
+                color: _currentIndex == 3 ? Theme.of(context).primaryColor : Colors.grey,
+              ),
               onPressed: () => _onTabTapped(3),
             ),
             IconButton(
-              icon: Icon(Icons.settings, color: _currentIndex == 4 ? Theme.of(context).primaryColor : Colors.grey),
+              icon: Icon(
+                Icons.settings,
+                color: _currentIndex == 4 ? Theme.of(context).primaryColor : Colors.grey,
+              ),
               onPressed: () => _onTabTapped(4),
             ),
           ],

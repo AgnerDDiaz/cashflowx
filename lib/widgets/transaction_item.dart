@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../screen/edit_transaction_screen.dart';
 import '../utils/app_colors.dart';
-import '../utils/exchange_rate_service.dart';
+import '../services/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
 
 class TransactionItem extends StatefulWidget {

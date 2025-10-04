@@ -1,28 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart'; // 👈 Agregado
-import 'package:cashflowx/utils/database_helper.dart';
-import 'package:cashflowx/screen/main_screen.dart';
-import 'package:cashflowx/utils/theme.dart';
+import 'package:flutter/foundation.dart' show kDebugMode; // ⬅️ solo kDebugMode
+import 'package:easy_localization/easy_localization.dart';
 
-void main() async {
+import 'utils/database_helper.dart';
+import 'utils/theme.dart';
+import 'screen/main_screen.dart';
+
+// Repos & Models (para cargar datos iniciales sin tocar pantallas aún)
+import 'repositories/accounts_repository.dart';
+import 'repositories/categories_repository.dart';
+import 'repositories/transactions_repository.dart';
+import 'models/account.dart';
+import 'models/category.dart' as model; // ⬅️ evita colisiones si alguna vez importas foundation entero
+import 'models/transaction.dart';
+
+// 🚧 Solo para desarrollo: borrar BD al arrancar si lo necesitas
+const bool kResetDbOnBoot = false;
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await EasyLocalization.ensureInitialized(); // 👈 Muy importante
+  await EasyLocalization.ensureInitialized();
 
-  await DatabaseHelper().resetDatabase();
+  if (kResetDbOnBoot && kDebugMode) {
+    await DatabaseHelper().resetDatabase();
+  }
 
-  final dbHelper = DatabaseHelper();
+  // Fuerza la inicialización/migraciones y (en debug) los seeds de prueba
+  await DatabaseHelper().database;
 
-  List<Map<String, dynamic>> accounts = await dbHelper.getAccounts();
-  List<Map<String, dynamic>> categories = await dbHelper.getCategories();
-  List<Map<String, dynamic>> transactions = await dbHelper.getTransactions();
+  // Cargar datos con repos (y pasarlos como Map para no romper MainScreen todavía)
+  final accounts = await _loadAccountsAsMaps();
+  final categories = await _loadCategoriesAsMaps();
+  final transactions = await _loadTransactionsAsMaps();
 
   runApp(
     EasyLocalization(
-      supportedLocales: const [
-        Locale('en'),
-        Locale('es')
-      ],
-      path: 'assets/l10n', // 👈 Aquí están los JSON
+      supportedLocales: const [Locale('en'), Locale('es')],
+      path: 'assets/l10n',
       fallbackLocale: const Locale('en'),
       child: MyApp(
         accounts: accounts,
@@ -58,9 +72,31 @@ class MyApp extends StatelessWidget {
         categories: categories,
         transactions: transactions,
       ),
-      localizationsDelegates: context.localizationDelegates, // 👈 Easy localization
-      supportedLocales: context.supportedLocales, // 👈 Easy localization
-      locale: context.locale, // 👈 Easy localization
+      // Easy Localization
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
     );
   }
+}
+
+// ==============================
+// Loaders temporales (pueden irse cuando migremos las pantallas a repos/services)
+// ==============================
+Future<List<Map<String, dynamic>>> _loadAccountsAsMaps() async {
+  final repo = AccountsRepository();
+  final list = await repo.getAll(); // List<Account>
+  return list.map<Map<String, dynamic>>((Account a) => a.toMap()).toList();
+}
+
+Future<List<Map<String, dynamic>>> _loadCategoriesAsMaps() async {
+  final repo = CategoriesRepository();
+  final list = await repo.getAll(); // List<model.Category>
+  return list.map<Map<String, dynamic>>((model.Category c) => c.toMap()).toList();
+}
+
+Future<List<Map<String, dynamic>>> _loadTransactionsAsMaps() async {
+  final repo = TransactionsRepository();
+  final list = await repo.all(); // List<AppTransaction>
+  return list.map<Map<String, dynamic>>((AppTransaction t) => t.toMap()).toList();
 }

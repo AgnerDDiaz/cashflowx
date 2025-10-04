@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:sqflite/sqflite.dart';
-import '../utils/currency_service.dart';
+import '../services/currency_service.dart';
 import '../utils/database_helper.dart';
 import '../utils/settings_helper.dart';
 

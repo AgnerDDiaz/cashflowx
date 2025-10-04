@@ -2,13 +2,18 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
+import '../services/exchange_rate_service.dart';
+import '../services/transaction_service.dart';
+import '../repositories/exchange_rates_repository.dart';
 import '../utils/app_colors.dart';
-import '../utils/database_helper.dart';
-import '../utils/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
+
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
 import '../screen/select_currency_screen.dart';
+
+import '../models/transaction.dart'; // AppTransaction
 
 class EditTransactionScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -31,13 +36,15 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   late TextEditingController amountController;
   late TextEditingController noteController;
 
-  final DatabaseHelper _dbHelper = DatabaseHelper();
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
+  final TransactionService _txService = TransactionService();
+  final ExchangeRatesRepository _ratesRepo = ExchangeRatesRepository();
 
   String selectedType = 'expense';
   int? selectedAccount;
   int? selectedCategory;
   int? linkedAccount;
+
   String selectedCurrency = 'DOP';
   double? convertedAmount;
   List<String> availableCurrencies = [];
@@ -46,25 +53,38 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    selectedDate = DateTime.parse(widget.transaction['date']);
-    amountController = TextEditingController(text: widget.transaction['amount'].toString());
-    noteController = TextEditingController(text: widget.transaction['note'] ?? '');
-    selectedType = widget.transaction['type'];
-    selectedAccount = widget.transaction['account_id'];
-    selectedCategory = widget.transaction['category_id'];
-    linkedAccount = widget.transaction['linked_account_id'];
-    selectedCurrency = widget.transaction['currency'] ?? 'DOP';
+
+    selectedDate = DateTime.parse(widget.transaction['date'] as String);
+    amountController = TextEditingController(
+      text: (widget.transaction['amount'] as num).toString(),
+    );
+    noteController = TextEditingController(
+      text: widget.transaction['note'] ?? '',
+    );
+    selectedType = widget.transaction['type'] as String;
+    selectedAccount = widget.transaction['account_id'] as int?;
+    selectedCategory = widget.transaction['category_id'] as int?;
+    linkedAccount = widget.transaction['linked_account_id'] as int?;
+    selectedCurrency = (widget.transaction['currency'] as String?) ?? 'DOP';
 
     amountController.addListener(_updateConvertedAmount);
     _loadInitialData();
   }
 
   Future<void> _loadInitialData() async {
-    mainCurrency = await SettingsHelper().getMainCurrency();
-    final currencies = await _dbHelper.getAllCurrenciesCodes();
+    mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
+
+    // Traer códigos de monedas desde la BD (tabla exchange_rates)
+    List<String> codes = await _ratesRepo.allBaseCurrencyCodes();
+    codes = codes.toSet().toList();
+
+    // Asegurar presencia de principales
+    for (final must in [mainCurrency!, 'USD', 'DOP']) {
+      if (!codes.contains(must)) codes.add(must);
+    }
 
     setState(() {
-      availableCurrencies = currencies.take(4).toList();
+      availableCurrencies = codes.take(6).toList();
     });
 
     _updateConvertedAmount();
@@ -75,10 +95,21 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
       setState(() => convertedAmount = null);
       return;
     }
+
+    final amount = double.tryParse(amountController.text) ?? 0.0;
+    if (amount <= 0) {
+      setState(() => convertedAmount = null);
+      return;
+    }
+
     try {
-      final rate = await _exchangeRateService.getExchangeRate(context, selectedCurrency, mainCurrency!);
+      final rate = await _exchangeRateService.getExchangeRate(
+        selectedCurrency,
+        mainCurrency!,
+        context: context,
+      );
       setState(() {
-        convertedAmount = (double.tryParse(amountController.text) ?? 0.0) * rate;
+        convertedAmount = amount * rate;
       });
     } catch (_) {
       setState(() => convertedAmount = null);
@@ -106,23 +137,29 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             const SizedBox(height: 15),
             _buildDateSelector(),
             const SizedBox(height: 15),
+
+            // Cuenta origen
             AccountSelector(
               accounts: widget.accounts,
               initialSelectedId: selectedAccount,
               onSelect: (id) {
                 setState(() {
                   selectedAccount = id;
-                  _updateConvertedAmount();
                 });
+                _updateConvertedAmount();
               },
             ),
             const SizedBox(height: 15),
+
+            // Cuenta destino (solo transfer)
             if (selectedType == 'transfer')
               AccountSelector(
                 accounts: widget.accounts.where((acc) => acc['id'] != selectedAccount).toList(),
                 initialSelectedId: linkedAccount,
                 onSelect: (id) => setState(() => linkedAccount = id),
               ),
+
+            // Categoría (no transfer)
             if (selectedType != 'transfer')
               CategorySelector(
                 categories: widget.categories,
@@ -130,15 +167,18 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                 initialSelectedId: selectedCategory,
                 onSelect: (id) => setState(() => selectedCategory = id),
               ),
+
             const SizedBox(height: 15),
+
+            // Monto + Moneda
             Row(
               children: [
                 Expanded(
                   flex: 2,
                   child: TextField(
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     controller: amountController,
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d*'))],
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+([.]\d{0,2})?'))],
                     decoration: InputDecoration(
                       labelText: 'amount'.tr(),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
@@ -152,12 +192,17 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                 ),
               ],
             ),
+
             if (convertedAmount != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('≈ ${convertedAmount!.toStringAsFixed(2)} $mainCurrency', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                child: Text('≈ ${convertedAmount!.toStringAsFixed(2)} $mainCurrency',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13)),
               ),
+
             const SizedBox(height: 15),
+
+            // Nota
             TextField(
               controller: noteController,
               decoration: InputDecoration(
@@ -165,7 +210,10 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
               ),
             ),
+
             const SizedBox(height: 25),
+
+            // Guardar / Eliminar
             Row(
               children: [
                 Expanded(
@@ -193,25 +241,20 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
 
   Widget _buildCurrencyDropdown() {
     final List<DropdownMenuItem<String>> items = [
-      ...availableCurrencies.map((currencyCode) => DropdownMenuItem(
-        value: currencyCode,
-        child: Text(currencyCode, overflow: TextOverflow.ellipsis),
+      ...availableCurrencies.map((code) => DropdownMenuItem(
+        value: code,
+        child: Text(code, overflow: TextOverflow.ellipsis),
       )),
-      DropdownMenuItem(
-        value: 'other',
-        child: Text("other_currency".tr()),
-      ),
+      DropdownMenuItem(value: 'other', child: Text("other_currency".tr())),
       if (!availableCurrencies.contains(selectedCurrency) && selectedCurrency != 'other')
-        DropdownMenuItem(
-          value: selectedCurrency,
-          child: Text(selectedCurrency, overflow: TextOverflow.ellipsis),
-        ),
+        DropdownMenuItem(value: selectedCurrency, child: Text(selectedCurrency, overflow: TextOverflow.ellipsis)),
     ];
 
     return DropdownButtonFormField<String>(
       value: selectedCurrency,
       items: items,
       onChanged: (value) async {
+        if (value == null) return;
         if (value == 'other') {
           final selected = await Navigator.push(
             context,
@@ -222,10 +265,8 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             _updateConvertedAmount();
           }
         } else {
-          setState(() {
-            selectedCurrency = value!;
-            _updateConvertedAmount();
-          });
+          setState(() => selectedCurrency = value);
+          _updateConvertedAmount();
         }
       },
       decoration: InputDecoration(
@@ -236,11 +277,10 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     );
   }
 
-
   Widget _buildDateSelector() {
     return GestureDetector(
       onTap: () async {
-        DateTime? picked = await showDatePicker(
+        final picked = await showDatePicker(
           context: context,
           initialDate: selectedDate,
           firstDate: DateTime(2000),
@@ -294,13 +334,13 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           onTap: () => _changeType(typeKey),
           child: Column(
             children: [
-              Text(label, style: TextStyle(fontSize: 14, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? typeColor : null)),
-              if (isSelected)
-                Container(
-                  height: 3,
-                  width: 50,
-                  color: typeColor,
-                ),
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? typeColor : null,
+                  )),
+              if (isSelected) Container(height: 3, width: 50, color: typeColor),
             ],
           ),
         );
@@ -317,20 +357,47 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   }
 
   Future<void> _updateTransaction() async {
-    double amount = double.tryParse(amountController.text) ?? 0.0;
-    Map<String, dynamic> updatedTransaction = {
-      'account_id': selectedAccount,
-      'linked_account_id': selectedType == 'transfer' ? linkedAccount : null,
-      'type': selectedType,
-      'amount': amount,
-      'currency': selectedCurrency,
-      'category_id': selectedType == 'transfer' ? null : selectedCategory,
-      'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-      'note': noteController.text.isEmpty ? null : noteController.text,
-    };
+    final amount = double.tryParse(amountController.text) ?? 0.0;
+    final dateIso = DateFormat('yyyy-MM-dd').format(selectedDate);
+    final note = noteController.text.isEmpty ? null : noteController.text;
 
-    await _dbHelper.updateTransaction(widget.transaction['id'], updatedTransaction);
-    Navigator.pop(context, true);
+    if (selectedAccount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('select_account'.tr())));
+      return;
+    }
+
+    if (selectedType == 'transfer' && (linkedAccount == null || linkedAccount == selectedAccount)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('select_destination_account'.tr())));
+      return;
+    }
+    if (selectedType != 'transfer' && selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('select_category'.tr())));
+      return;
+    }
+
+    // Construir modelo actualizado con el MISMO id
+    final updated = AppTransaction(
+      id: widget.transaction['id'] as int,
+      accountId: selectedAccount!,
+      linkedAccountId: selectedType == 'transfer' ? linkedAccount : null,
+      type: selectedType,
+      amount: amount,
+      currency: selectedCurrency,
+      categoryId: selectedType == 'transfer' ? null : selectedCategory,
+      date: dateIso,
+      note: note,
+    );
+
+    try {
+      await _txService.updateTransaction(updated);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('error_updating_transaction'.tr(args: [e.toString()]))),
+      );
+    }
   }
 
   void _confirmDeleteTransaction() {
@@ -347,9 +414,17 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.errorColor),
             onPressed: () async {
-              await _dbHelper.deleteTransaction(widget.transaction['id']);
-              Navigator.pop(context);
-              Navigator.pop(context, true);
+              try {
+                await _txService.deleteTransaction(widget.transaction['id'] as int);
+                if (!mounted) return;
+                Navigator.pop(context);
+                Navigator.pop(context, true);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('error_deleting_transaction'.tr(args: [e.toString()]))),
+                );
+              }
             },
             child: Text('delete'.tr(), style: const TextStyle(color: Colors.white)),
           ),

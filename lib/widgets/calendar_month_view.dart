@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../utils/app_colors.dart';
-import '../utils/exchange_rate_service.dart';
+import '../services/exchange_rate_service.dart';
 import '../utils/settings_helper.dart';
 
 /// Notifica al padre un cambio de filtro/fecha
