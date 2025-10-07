@@ -69,10 +69,75 @@
   "delete_category": "Eliminar Categoría",
   "delete_category_confirmation": "¿Estás seguro que deseas eliminar esta categoría? Esta acción no se puede deshacer.",
   "main_currency_updated_to": "Moneda principal actualizada a {}",
-  "change_language": "Cambiar idioma"
-
-
+  "change_language": "Cambiar idioma",
+  "manage_accounts": "Administrador de cuentas",
+  "first_day_of_week": "Primer dia de la semana",
+  "manage_categories": "Administrador de categorias",
+  "recurring_transactions": "Transacciones recurrentes",
+  "budget_settings": "Administrar presupuesto",
+  "appearance": "Apariencia",
+  "system_default": "Sistema predeterminado",
+  "notifications": "Notificaciones",
+  "scheduled": {
+    "title": "Transacciones Recurrentes",
+    "empty": "No hay transacciones recurrentes.",
+    "freq_weekly": "Trans. Semanales",
+    "freq_biweekly": "Trans. Quincenales",
+    "freq_monthly": "Trans. Mensuales",
+    "freq_quarterly": "Trans. Trimestrales",
+    "freq_semiannual": "Trans. Semestrales",
+    "freq_annual": "Trans. Anuales",
+    "freq_generic": "Trans. Recurrentes",
+    "expenses": "Gastos",
+    "incomes": "Ingresos",
+    "transfers": "Transferencias",
+    "transfer": "Transferencia",
+    "no_desc": "Sin descripción",
+    "amount": "Monto",
+    "next_charge": "Próximo cobro",
+    "ends": "Finaliza",
+    "from_to": "De: {0} → {1}",
+    "hide": "Ocultar (pausar)",
+    "show": "Mostrar (activar)",
+    "delete_title": "Eliminar transacción recurrente",
+    "delete_body": "Esto NO borra las transacciones ya generadas por esta regla. ¿Deseas continuar?",
+    "deleted_toast": "Transacción recurrente eliminada", "create_title": "Programar transacción",
+    "edit_title": "Editar transacción recurrente",
+    "title_field": "Título",
+    "frequency": "Frecuencia",
+    "active": "Activo",
+    "pick_date": "Selecciona la fecha",
+    "freq_weekly_short": "Semanal",
+    "freq_biweekly_short": "Quincenal",
+    "freq_monthly_short": "Mensual",
+    "freq_quarterly_short": "Trimestral",
+    "freq_semiannual_short": "Semestral",
+    "freq_annual_short": "Anual",
+    "tab_expenses": "Gastos",
+    "tab_income": "Ingreso",
+    "tab_transfer": "Transferencia",
+    "err_select_account": "Selecciona una cuenta.",
+    "err_amount": "Ingresa un monto válido.",
+    "err_select_dest": "Selecciona una cuenta destino válida.",
+    "err_select_category": "Selecciona una categoría.",
+    "err_start_past": "La fecha inicio no puede ser anterior a hoy."
+  },
+  "common": {
+    "add": "Agregar",
+    "edit": "Editar",
+    "done_editing": "Salir de edición",
+    "delete": "Eliminar",
+    "cancel": "Cancelar",
+    "hidden": "oculta", "save": "Guardar",
+    "save_changes": "Guardar cambios"
+  }
 }
+
+
+
+
+
+
 
 
 

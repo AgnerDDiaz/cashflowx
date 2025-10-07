@@ -16,6 +16,10 @@ import 'accounts_screen.dart';
 import 'settings_screen.dart';
 import 'add_transaction_screen.dart';
 
+// Servicios que necesitan validacion al iniciar la app
+import '../services/scheduled_transactions_processor.dart';
+
+
 class MainScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> categories;
@@ -42,6 +46,8 @@ class _MainScreenState extends State<MainScreen> {
   final _accountsRepo = AccountsRepository();
   final _categoriesRepo = CategoriesRepository();
   final _txRepo = TransactionsRepository();
+  final _scheduledProcessor = ScheduledTransactionsProcessor();
+
 
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
   final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey();
@@ -52,7 +58,22 @@ class _MainScreenState extends State<MainScreen> {
     _accounts = List<Map<String, dynamic>>.from(widget.accounts);
     _categories = List<Map<String, dynamic>>.from(widget.categories);
     _transactions = List<Map<String, dynamic>>.from(widget.transactions);
+
+    // Ejecutar el processor al inicio (no bloqueante)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _scheduledProcessor.runDue();
+      await fetchData();
+    });
+
+    // Escuchar cuando la app vuelve al foreground
+    WidgetsBinding.instance.addObserver(
+      LifecycleEventHandler(resumeCallBack: () async {
+        await _scheduledProcessor.runDue();
+        await fetchData();
+      }),
+    );
   }
+
 
   @override
   void didChangeDependencies() {
@@ -184,3 +205,17 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
+
+class LifecycleEventHandler extends WidgetsBindingObserver {
+  final Future<void> Function()? resumeCallBack;
+
+  LifecycleEventHandler({this.resumeCallBack});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && resumeCallBack != null) {
+      resumeCallBack!();
+    }
+  }
+}
+

@@ -1,3 +1,4 @@
+// lib/services/transaction_service.dart
 import 'package:flutter/foundation.dart';
 
 import '../repositories/accounts_repository.dart';
@@ -21,6 +22,7 @@ class TransactionService {
     int? categoryId,
     required String dateIso,
     String? note,
+    int? scheduledId, // <-- NUEVO (opcional)
   }) async {
     final tx = AppTransaction(
       accountId: accountId,
@@ -30,6 +32,7 @@ class TransactionService {
       categoryId: categoryId,
       date: dateIso,
       note: note,
+      scheduledId: scheduledId, // <-- se persistirá como 'scheduled_id'
     );
 
     final inserted = await _txRepo.insert(tx);
@@ -44,6 +47,7 @@ class TransactionService {
     int? categoryId,
     required String dateIso,
     String? note,
+    int? scheduledId, // <-- NUEVO (opcional)
   }) async {
     final tx = AppTransaction(
       accountId: accountId,
@@ -53,6 +57,7 @@ class TransactionService {
       categoryId: categoryId,
       date: dateIso,
       note: note,
+      scheduledId: scheduledId, // <-- se persistirá como 'scheduled_id'
     );
 
     final inserted = await _txRepo.insert(tx);
@@ -61,7 +66,7 @@ class TransactionService {
   }
 
   /// Transferencia: una sola fila tipo 'transfer' con linked_account_id.
-  /// Efectos de saldo: -amount a origen (+conversion si moneda distinta) y +amount convertido a destino.
+  /// Efectos de saldo: -amount a origen (+conversión si moneda distinta) y +amount convertido a destino.
   Future<AppTransaction> addTransfer({
     required int fromAccountId,
     required int toAccountId,
@@ -69,6 +74,7 @@ class TransactionService {
     required String currency, // moneda del monto introducido
     required String dateIso,
     String? note,
+    int? scheduledId, // <-- NUEVO (opcional)
   }) async {
     if (fromAccountId == toAccountId) {
       throw ArgumentError('Las cuentas de origen y destino no pueden ser iguales.');
@@ -83,6 +89,7 @@ class TransactionService {
       categoryId: null,
       date: dateIso,
       note: note,
+      scheduledId: scheduledId, // <-- se persistirá como 'scheduled_id'
     );
 
     final inserted = await _txRepo.insert(tx);
@@ -168,7 +175,6 @@ class TransactionService {
         await _applyBalanceDelta(toId, credit, txCurrency: destCurrency);
         break;
       default:
-      // nada
         break;
     }
   }

@@ -87,9 +87,27 @@ class TransactionsRepository {
 
   // ====== Escrituras básicas (CRUD) ======
 
+  /// Inserta una transacción.
+  /// Si el mapa contiene `scheduled_id` (materializada desde una recurrente),
+  /// usamos `ConflictAlgorithm.ignore` para NO crashear ante el índice único
+  /// (scheduled_id, date) cuando hay condiciones de carrera.
   Future<AppTransaction> insert(AppTransaction t) async {
     final db = await _db;
-    final id = await db.insert('transactions', t.toMap());
+    final data = t.toMap();
+
+    final hasScheduled = data.containsKey('scheduled_id') && data['scheduled_id'] != null;
+
+    final id = await db.insert(
+      'transactions',
+      data,
+      conflictAlgorithm: hasScheduled ? ConflictAlgorithm.ignore : ConflictAlgorithm.abort,
+    );
+
+    // Si fue ignorado por conflicto (id = 0 en Android / null en iOS),
+    // devolvemos el mismo objeto (sin id) para que el caller pueda decidir.
+    if (id == 0) return t; // Android
+    if (id == 0 || id == null) return t; // iOS defensivo
+
     return t.copyWith(id: id);
   }
 
@@ -102,6 +120,22 @@ class TransactionsRepository {
   Future<void> delete(int id) async {
     final db = await _db;
     await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ====== Utilidades para recurrentes (anti-duplicados) ======
+
+  /// Verifica si ya existe una transacción materializada para una recurrente
+  /// específica en una fecha ISO dada (YYYY-MM-DD).
+  Future<bool> existsScheduledOnDate(int scheduledId, String dateIso) async {
+    final db = await _db;
+    final rows = await db.query(
+      'transactions',
+      columns: const ['id'],
+      where: 'scheduled_id = ? AND date = ?',
+      whereArgs: [scheduledId, dateIso],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   // ====== Agregaciones para reportes ======

@@ -1,3 +1,4 @@
+import 'package:cashflowx/screen/scheduled_transactions_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
@@ -148,12 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!mounted) return;
                 setState(() => _mainCurrency = selected);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      trOr('main_currency_updated_to', 'Main currency updated to {0}')
-                          .replaceFirst('{0}', selected),
-                    ),
-                  ),
+                  SnackBar(content: Text('main_currency_updated_to'.tr(args: [selected]))),
                 );
               }
             },
@@ -189,12 +185,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 1),
 
           ListTile(
-            leading: const Icon(Icons.autorenew_outlined),
-            title: Text(trOr('recurring_transactions', 'Recurring transactions')),
+            leading: const Icon(Icons.repeat),
+            title: const Text("Transacciones Recurrentes"),
+            subtitle: const Text("Ver, activar o editar transacciones automáticas"),
             onTap: () {
-              // TODO: administrar transacciones recurrentes
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ScheduledTransactionsScreen()),
+              );
             },
           ),
+
           const Divider(height: 1),
 
           ListTile(

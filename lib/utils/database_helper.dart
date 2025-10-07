@@ -12,8 +12,7 @@ class DatabaseHelper {
   DatabaseHelper._internal();
 
   Future<Database> get database async {
-    if (_database != null) return _database!
-    ;
+    if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
@@ -23,7 +22,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 10, // v10: default group + triggers para asegurar group_id
+      version: 12, // v12: recurrencias robustas (is_active, error log, tz, índices) + scheduled_id en transactions
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -122,7 +121,37 @@ class DatabaseHelper {
     ''');
     await db.execute("CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id);");
 
-    // transactions
+    // -------------------------------
+    // scheduled_transactions (final)
+    // -------------------------------
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scheduled_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL,
+        linked_account_id INTEGER,
+        type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+        amount REAL NOT NULL CHECK (amount > 0),
+        currency TEXT NOT NULL DEFAULT 'DOP',
+        category_id INTEGER,
+        start_date TEXT NOT NULL,
+        end_date TEXT NULL,
+        frequency TEXT NOT NULL,
+        next_run TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        failed_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT NULL,
+        tz TEXT NOT NULL DEFAULT 'UTC',
+        note TEXT,
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      );
+    ''');
+
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_active_next_run ON scheduled_transactions(is_active, next_run);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_next_run ON scheduled_transactions(next_run);');
+
+    // transactions (ahora con scheduled_id)
     await db.execute('''
       CREATE TABLE transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,15 +163,23 @@ class DatabaseHelper {
         category_id INTEGER DEFAULT NULL,
         date TEXT NOT NULL,
         note TEXT DEFAULT NULL,
+        scheduled_id INTEGER NULL,
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
         FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+        FOREIGN KEY (scheduled_id) REFERENCES scheduled_transactions(id) ON DELETE SET NULL,
         CHECK (type <> 'transfer' OR linked_account_id IS NOT NULL)
       );
     ''');
     await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date);");
     await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_account ON transactions(account_id);");
     await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_linked ON transactions(linked_account_id);");
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_scheduled ON transactions(scheduled_id);");
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_sched_date
+      ON transactions(scheduled_id, date)
+      WHERE scheduled_id IS NOT NULL;
+    ''');
 
     // budgets
     await db.execute('''
@@ -206,26 +243,6 @@ class DatabaseHelper {
       CREATE TABLE currency_names (
         code TEXT PRIMARY KEY,
         name TEXT
-      );
-    ''');
-
-    // scheduled_transactions
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS scheduled_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        account_id INTEGER NOT NULL,
-        linked_account_id INTEGER,
-        type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
-        amount REAL NOT NULL CHECK (amount > 0),
-        currency TEXT NOT NULL DEFAULT 'DOP',
-        category_id INTEGER,
-        start_date TEXT NOT NULL,
-        frequency TEXT NOT NULL,
-        next_run TEXT NOT NULL,
-        note TEXT,
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-        FOREIGN KEY (linked_account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
       );
     ''');
 
@@ -401,7 +418,6 @@ class DatabaseHelper {
 
     // v10: default group + backfill + triggers
     if (oldVersion < 10) {
-      // Asegurar tabla de grupos
       await db.execute('''
         CREATE TABLE IF NOT EXISTS account_groups (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -412,21 +428,18 @@ class DatabaseHelper {
         );
       ''');
 
-      // Crear/asegurar "General"
       await db.insert(
         'account_groups',
         {'name': 'General', 'sort_order': 0},
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
 
-      // Backfill: cuentas sin group_id → "General"
       await db.execute('''
         UPDATE accounts
         SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
         WHERE group_id IS NULL;
       ''');
 
-      // Triggers
       await db.execute('''
       CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_insert
       AFTER INSERT ON accounts
@@ -449,6 +462,30 @@ class DatabaseHelper {
         SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
         WHERE id = NEW.id;
       END;
+      ''');
+    }
+
+    // v11: end_date en scheduled
+    if (oldVersion < 11) {
+      try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN end_date TEXT NULL;"); } catch (_) {}
+    }
+
+    // v12: robustecer recurrencias + scheduled_id en transactions + índices
+    if (oldVersion < 12) {
+      try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;"); } catch (_) {}
+      try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN failed_count INTEGER NOT NULL DEFAULT 0;"); } catch (_) {}
+      try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN last_error TEXT NULL;"); } catch (_) {}
+      try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN tz TEXT NOT NULL DEFAULT 'UTC';"); } catch (_) {}
+
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_active_next_run ON scheduled_transactions(is_active, next_run);');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_next_run ON scheduled_transactions(next_run);');
+
+      try { await db.execute("ALTER TABLE transactions ADD COLUMN scheduled_id INTEGER NULL;"); } catch (_) {}
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_txn_scheduled ON transactions(scheduled_id);");
+      await db.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_sched_date
+        ON transactions(scheduled_id, date)
+        WHERE scheduled_id IS NOT NULL;
       ''');
     }
   }

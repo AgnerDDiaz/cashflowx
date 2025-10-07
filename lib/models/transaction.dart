@@ -1,18 +1,24 @@
+// lib/models/transaction.dart
+
 class AppTransaction {
-  // Tipos
-  static const String typeIncome  = 'income';
+  static const String typeIncome = 'income';
   static const String typeExpense = 'expense';
-  static const String typeTransfer= 'transfer';
+  static const String typeTransfer = 'transfer';
 
   final int? id;
-  final int accountId;         // cuenta origen
-  final int? linkedAccountId;  // cuenta destino (solo transfer)
-  final String type;           // income | expense | transfer
-  final double amount;         // > 0
-  final String currency;       // 'DOP', 'USD', ...
-  final int? categoryId;       // NULL para transfer
-  final String date;           // 'YYYY-MM-DD'
+
+  // Core
+  final int accountId;
+  final int? linkedAccountId; // sólo en transfer
+  final String type;          // income | expense | transfer
+  final double amount;
+  final String currency;
+  final int? categoryId;      // null en transfer
+  final String date;          // ISO 'YYYY-MM-DD'
   final String? note;
+
+  // Vinculo con recurrente (v12)
+  final int? scheduledId;     // NULL si NO proviene de una recurrente
 
   const AppTransaction({
     this.id,
@@ -24,9 +30,8 @@ class AppTransaction {
     this.categoryId,
     required this.date,
     this.note,
+    this.scheduledId, // nuevo
   });
-
-  bool get isTransfer => type == typeTransfer;
 
   AppTransaction copyWith({
     int? id,
@@ -38,6 +43,7 @@ class AppTransaction {
     int? categoryId,
     String? date,
     String? note,
+    int? scheduledId, // nuevo
   }) {
     return AppTransaction(
       id: id ?? this.id,
@@ -49,30 +55,37 @@ class AppTransaction {
       categoryId: categoryId ?? this.categoryId,
       date: date ?? this.date,
       note: note ?? this.note,
+      scheduledId: scheduledId ?? this.scheduledId, // nuevo
     );
   }
 
-  factory AppTransaction.fromMap(Map<String, dynamic> m) => AppTransaction(
-    id: m['id'] as int?,
-    accountId: (m['account_id'] as num).toInt(),
-    linkedAccountId: m['linked_account_id'] as int?,
-    type: m['type'] as String,
-    amount: (m['amount'] as num).toDouble(),
-    currency: m['currency'] as String,
-    categoryId: m['category_id'] as int?,
-    date: m['date'] as String,
-    note: m['note'] as String?,
-  );
+  factory AppTransaction.fromMap(Map<String, dynamic> m) {
+    return AppTransaction(
+      id: m['id'] as int?,
+      accountId: (m['account_id'] as num).toInt(),
+      linkedAccountId: m['linked_account_id'] as int?,
+      type: m['type'] as String,
+      amount: (m['amount'] as num).toDouble(),
+      currency: m['currency'] as String,
+      categoryId: m['category_id'] as int?,
+      date: m['date'] as String,
+      note: m['note'] as String?,
+      scheduledId: m['scheduled_id'] as int?, // nuevo
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-    if (id != null) 'id': id,
-    'account_id': accountId,
-    'linked_account_id': linkedAccountId,
-    'type': type,
-    'amount': amount,
-    'currency': currency,
-    'category_id': categoryId,
-    'date': date,
-    'note': note,
-  };
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'account_id': accountId,
+      'linked_account_id': linkedAccountId,
+      'type': type,
+      'amount': amount,
+      'currency': currency,
+      'category_id': categoryId,
+      'date': date,
+      'note': note,
+      'scheduled_id': scheduledId, // nuevo
+    };
+  }
 }
