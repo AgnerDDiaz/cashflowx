@@ -136,7 +136,9 @@
     "cancel": "Cancelar",
     "hidden": "oculta", "save": "Guardar",
     "save_changes": "Guardar cambios"
-  }
+  },
+  "theme": { "system":"Según el sistema", "light":"Claro", "dark":"Oscuro" },
+  "language": { "system":"Según el sistema" }
 }
 
 

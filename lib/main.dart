@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 
 import 'utils/database_helper.dart';
 import 'utils/theme.dart';
+import 'utils/settings_helper.dart'; // ⬅️ NUEVO
 import 'screen/main_screen.dart';
 
 // Repos & Models (para cargar datos iniciales sin tocar pantallas aún)
@@ -27,6 +28,9 @@ Future<void> main() async {
 
   // Fuerza la inicialización/migraciones y (en debug) los seeds de prueba
   await DatabaseHelper().database;
+
+  // Cargar tema/idioma desde la tabla settings (para que el themeMode quede listo)
+  await SettingsHelper().loadThemeAndLanguage(); // ⬅️ NUEVO
 
   // Cargar datos con repos (y pasarlos como Map para no romper MainScreen todavía)
   final accounts = await _loadAccountsAsMaps();
@@ -61,21 +65,27 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'CashFlowX',
-      debugShowCheckedModeBanner: false,
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.system,
-      home: MainScreen(
-        accounts: accounts,
-        categories: categories,
-        transactions: transactions,
-      ),
-      // Easy Localization
-      localizationsDelegates: context.localizationDelegates,
-      supportedLocales: context.supportedLocales,
-      locale: context.locale,
+    // ⬇️ Escucha cambios de tema desde SettingsHelper.themeMode
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: SettingsHelper.themeMode,
+      builder: (_, mode, __) {
+        return MaterialApp(
+          title: 'CashFlowX',
+          debugShowCheckedModeBanner: false,
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: mode, // ⬅️ NUEVO: aplica system/light/dark guardado
+          home: MainScreen(
+            accounts: accounts,
+            categories: categories,
+            transactions: transactions,
+          ),
+          // Easy Localization
+          localizationsDelegates: context.localizationDelegates,
+          supportedLocales: context.supportedLocales,
+          locale: context.locale,
+        );
+      },
     );
   }
 }

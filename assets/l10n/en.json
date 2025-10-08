@@ -139,7 +139,12 @@
     "hidden": "hidden",
     "save": "Save",
     "save_changes": "Save changes"
-  }
+  },
+  "theme": { "system":"System default", "light":"Light", "dark":"Dark" },
+
+  "language": { "system":"System default" }
+
+
 }
 
 
