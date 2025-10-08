@@ -5,14 +5,18 @@ import 'package:intl/intl.dart';
 
 import '../models/scheduled_transaction.dart';
 import '../repositories/scheduled_transactions_repository.dart';
+import '../repositories/exchange_rates_repository.dart'; // << NUEVO
 import '../services/transaction_service.dart';
+import '../services/exchange_rate_service.dart';
 import '../utils/database_helper.dart';
 import '../utils/app_colors.dart';
+import '../utils/settings_helper.dart';
 
-// Selectores existentes en tu app
+// Selectores
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
 import '../widgets/selectors/currency_selector.dart';
+import '../widgets/selectors/frequency_selector.dart';
 
 class EditScheduledTransactionScreen extends StatefulWidget {
   final ScheduledTransaction? transaction; // null => crear
@@ -25,8 +29,10 @@ class EditScheduledTransactionScreen extends StatefulWidget {
 
 class _EditScheduledTransactionScreenState extends State<EditScheduledTransactionScreen> {
   final _repo = ScheduledTransactionsRepository();
+  final _ratesRepo = ExchangeRatesRepository();           // << NUEVO
   final _db = DatabaseHelper();
   final _txService = TransactionService();
+  final _fx = ExchangeRateService();
   final _fmt = DateFormat('yyyy-MM-dd');
 
   // datos base para selectores
@@ -58,7 +64,7 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
   void initState() {
     super.initState();
     _initLoad();
-    _amountCtrl.addListener(_recalcPreview);
+    _amountCtrl.addListener(_recalcPreview); // escucha cambios de monto
   }
 
   @override
@@ -84,15 +90,16 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
       orderBy: 'name COLLATE NOCASE ASC',
     );
 
-    final set = <String>{'DOP','USD','EUR'};
-    for (final a in _accounts) {
-      final c = a['currency'] as String?;
-      if (c != null && c.isNotEmpty) set.add(c);
+    // Moneda principal desde settings; si no hay valor, usar primera cuenta como fallback
+    final settingsMain = await SettingsHelper().getMainCurrency();
+    if (settingsMain != null && settingsMain.isNotEmpty) {
+      _mainCurrency = settingsMain;
+    } else if (_accounts.isNotEmpty) {
+      _mainCurrency = (_accounts.first['currency'] as String?) ?? _mainCurrency;
     }
-    _currencies = set.toList()..sort();
-    if (_accounts.isNotEmpty) {
-      _mainCurrency = (_accounts.first['currency'] as String?) ?? 'DOP';
-    }
+
+    // Cargar lista AMPLIA de monedas (igual criterio que Add/Edit)
+    _currencies = await _buildCurrencyList();
 
     if (_isEdit) {
       final s = widget.transaction!;
@@ -118,25 +125,59 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
         startIso: s.startDate,
       );
     } else {
-      // >>> CAMBIO: NO auto-seleccionar cuenta; dejar “Select Account”
+      // sin selección inicial
       _accountId = null;
       _linkedAccountId = null;
       _categoryId = null;
-      _currency = _mainCurrency; // o deja 'DOP' si prefieres
+      _currency = _mainCurrency;
     }
 
-    _recalcPreview();
-    setState(() => _loading = false);
+    await _recalcPreview();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  /// Semilla de “monedas rápidas” para que coincida con Add/Edit
+  static const List<String> _quickCurrencySeed = [
+    'USD', 'EUR', 'GBP', 'CAD', 'JPY', 'MXN', 'DOP'
+  ];
+
+  /// Construye la lista final: quick + todas las del repo (base/target) + monedas de cuentas.
+  Future<List<String>> _buildCurrencyList() async {
+    final fromRepo = await _ratesRepo.allCurrencies();                 // usa base_currency/target_currency
+    final fromAccounts = _accounts
+        .map((a) => (a['currency'] ?? '').toString().trim())
+        .where((c) => c.isNotEmpty);
+
+    final set = <String>{
+      ..._quickCurrencySeed,
+      ...fromRepo,
+      ...fromAccounts,
+      _mainCurrency, // garantizamos main
+    };
+
+    final list = set.toList()..sort();
+    return list;
   }
 
   // === helpers ===
-  void _recalcPreview() {
+  Future<void> _recalcPreview() async {
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.')) ?? 0.0;
     if (amount <= 0) {
-      setState(() => _previewInMain = null);
+      if (mounted) setState(() => _previewInMain = null);
       return;
     }
-    setState(() => _previewInMain = null); // integrar ExchangeRateService si deseas
+
+    try {
+      if (_currency == _mainCurrency) {
+        if (mounted) setState(() => _previewInMain = amount);
+        return;
+      }
+      // Firma correcta: (BuildContext context, String from, String to)
+      final rate = await _fx.getExchangeRate(_currency, _mainCurrency, context: context);
+      if (mounted) setState(() => _previewInMain = amount * rate);
+    } catch (_) {
+      if (mounted) setState(() => _previewInMain = null);
+    }
   }
 
   DateTime _floorDate(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -151,13 +192,20 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
     }
 
     switch (freq.toLowerCase()) {
-      case 'weekly': return d.add(const Duration(days: 7));
-      case 'biweekly': return d.add(const Duration(days: 14));
-      case 'monthly': return addMonths(1);
-      case 'quarterly': return addMonths(3);
-      case 'semiannual': return addMonths(6);
-      case 'annual': return DateTime(d.year + 1, d.month, d.day);
-      default: return addMonths(1);
+      case 'weekly':
+        return d.add(const Duration(days: 7));
+      case 'biweekly':
+        return d.add(const Duration(days: 14));
+      case 'monthly':
+        return addMonths(1);
+      case 'quarterly':
+        return addMonths(3);
+      case 'semiannual':
+        return addMonths(6);
+      case 'annual':
+        return DateTime(d.year + 1, d.month, d.day);
+      default:
+        return addMonths(1);
     }
   }
 
@@ -178,7 +226,9 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
   // === UI ===
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     final title = _isEdit ? tr('scheduled.edit_title') : tr('scheduled.create_title');
 
@@ -216,7 +266,7 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
             _datePicker(),
             const SizedBox(height: 16),
 
-            // Selector de cuenta (sin selección inicial en crear)
+            // Cuenta origen
             AccountSelector(
               accounts: _accounts,
               initialSelectedId: _accountId,
@@ -225,12 +275,9 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
                   _accountId = id;
                   final m = _accounts.firstWhere((a) => a['id'] == id, orElse: () => {});
                   if (m.isNotEmpty) _currency = (m['currency'] as String?) ?? _currency;
-                  if (_type == 'transfer' && _linkedAccountId == _accountId) {
-                    _linkedAccountId = null;
-                  }
                 });
+                _recalcPreview();
               },
-
             ),
 
             if (_type == 'transfer')
@@ -263,7 +310,9 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
                   child: TextField(
                     controller: _amountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+([.]\d{0,2})?'))],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d+([.]\d{0,2})?'))
+                    ],
                     decoration: InputDecoration(
                       labelText: tr('scheduled.amount'),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
@@ -274,40 +323,32 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
                 Expanded(
                   flex: 2,
                   child: CurrencySelector(
-                    currencies: _currencies,
-                    selectedCurrency: _currency,
-                    onChanged: (c) => setState(() => _currency = c),
-                    onOtherSelected: () {},
+                    currencies: _currencies.map((c) => {"code": c, "name": ""}).toList(),
+                    initialSelectedCode: _currency,
+                    onSelect: (code) {
+                      setState(() => _currency = code);
+                      _recalcPreview();
+                    },
                   ),
                 ),
               ],
             ),
+
             if (_previewInMain != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6.0),
-                child: Text('≈ ${_previewInMain!.toStringAsFixed(2)} $_mainCurrency',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                child: Text(
+                  '≈ ${_previewInMain!.toStringAsFixed(2)} $_mainCurrency',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                ),
               ),
 
             const SizedBox(height: 16),
 
-            // Frecuencia localizable
-            DropdownButtonFormField<String>(
-              value: _frequency,
-              items: [
-                DropdownMenuItem(value: 'weekly', child: Text(tr('scheduled.freq_weekly_short'))),
-                DropdownMenuItem(value: 'biweekly', child: Text(tr('scheduled.freq_biweekly_short'))),
-                DropdownMenuItem(value: 'monthly', child: Text(tr('scheduled.freq_monthly_short'))),
-                DropdownMenuItem(value: 'quarterly', child: Text(tr('scheduled.freq_quarterly_short'))),
-                DropdownMenuItem(value: 'semiannual', child: Text(tr('scheduled.freq_semiannual_short'))),
-                DropdownMenuItem(value: 'annual', child: Text(tr('scheduled.freq_annual_short'))),
-              ],
-              onChanged: (v) => setState(() => _frequency = v ?? 'monthly'),
-              decoration: InputDecoration(
-                labelText: tr('scheduled.frequency'),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-              ),
-              isExpanded: true,
+            // Frecuencia estandarizada
+            FrequencySelector(
+              initialValue: _frequency,
+              onSelect: (v) => setState(() => _frequency = v),
             ),
 
             const SizedBox(height: 16),
@@ -315,7 +356,13 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(tr('scheduled.active'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  tr('scheduled.active'),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
                 Switch(value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
               ],
             ),
@@ -404,8 +451,10 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(DateFormat('d MMM y', context.locale.toString()).format(_startDate),
-                style: Theme.of(context).textTheme.bodyLarge),
+            Text(
+              DateFormat('d MMM y', context.locale.toString()).format(_startDate),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
             Icon(Icons.calendar_today, size: 20, color: Theme.of(context).iconTheme.color),
           ],
         ),
@@ -603,5 +652,6 @@ class ScheduledTransactionFields {
           startIso == other.startIso;
 
   @override
-  int get hashCode => Object.hash(type, accountId, linkedId, categoryId, amount, currency, frequency, startIso);
+  int get hashCode =>
+      Object.hash(type, accountId, linkedId, categoryId, amount, currency, frequency, startIso);
 }

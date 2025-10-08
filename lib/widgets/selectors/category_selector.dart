@@ -1,10 +1,11 @@
+// widgets/selectors/category_selector.dart
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import '../../utils/app_colors.dart'; // 📌 Importamos AppColors
+import '../../screen/manage_categories_screen.dart'; // <-- importa la nueva pantalla
 
 class CategorySelector extends StatefulWidget {
-  final List<Map<String, dynamic>> categories;
-  final String transactionType;
+  final List<Map<String, dynamic>> categories;          // [{id,name,type,parent_id}, ...]
+  final String transactionType;                          // "expense" | "income"
   final Function(int) onSelect;
   final int? initialSelectedId;
 
@@ -17,7 +18,7 @@ class CategorySelector extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _CategorySelectorState createState() => _CategorySelectorState();
+  State<CategorySelector> createState() => _CategorySelectorState();
 }
 
 class _CategorySelectorState extends State<CategorySelector> {
@@ -45,14 +46,15 @@ class _CategorySelectorState extends State<CategorySelector> {
           children: [
             Text(
               selectedCategory != null
-                  ? widget.categories.firstWhere(
+                  ? (widget.categories.firstWhere(
                     (cat) => cat['id'] == selectedCategory,
                 orElse: () => {'name': 'unknown_category'.tr()},
-              )['name']
+              )['name'] as String)
                   : "select_category".tr(),
               style: Theme.of(context).textTheme.bodyLarge,
             ),
-            Icon(Icons.arrow_drop_down, size: 24, color: Theme.of(context).iconTheme.color),
+            Icon(Icons.arrow_drop_down,
+                size: 24, color: Theme.of(context).iconTheme.color),
           ],
         ),
       ),
@@ -65,116 +67,105 @@ class _CategorySelectorState extends State<CategorySelector> {
       isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateModal) {
-            List<Map<String, dynamic>> filteredCategories = widget.categories
-                .where((cat) => cat['type'] == widget.transactionType)
-                .toList();
+        return StatefulBuilder(builder: (context, setStateModal) {
+          final filtered = widget.categories
+              .where((c) => c['type'] == widget.transactionType)
+              .toList();
+          final mains = filtered.where((c) => c['parent_id'] == null).toList();
+          final textColor = Theme.of(context).textTheme.titleLarge?.color;
 
-            List<Map<String, dynamic>> mainCategories =
-            filteredCategories.where((cat) => cat['parent_id'] == null).toList();
+          return Container(
+            padding: const EdgeInsets.all(16),
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              children: [
+                // Header con título + ✎ (misma tonalidad que el texto: negro/blanco según tema)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("category".tr(),
+                        style: Theme.of(context).textTheme.titleLarge),
+                    IconButton(
+                      icon: const Icon(Icons.edit),   // ← ✎
+                      color: textColor,               // ← mismo color que el texto (oscuro/claro)
+                      tooltip: 'edit'.tr(),
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ManageCategoriesScreen(
+                              initialType: widget.transactionType,
+                              // para el demo pasamos las categorías actuales
+                              categories: widget.categories,
+                            ),
+                          ),
+                        );
+                        // al volver simplemente cerramos el modal o recargamos si quieres
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView(
+                    children: mains.map((cat) {
+                      final subs = filtered
+                          .where((s) => s['parent_id'] == cat['id'])
+                          .toList();
+                      final isExpanded = expandedCategory == cat['id'];
 
-            return Container(
-              padding: const EdgeInsets.all(16),
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "category".tr(),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                        color: Theme.of(context).iconTheme.color,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView(
-                      children: mainCategories.map((category) {
-                        List<Map<String, dynamic>> subcategories = filteredCategories
-                            .where((sub) => sub['parent_id'] == category['id'])
-                            .toList();
-
-                        bool isExpanded = expandedCategory == category['id'];
-
-                        return Column(
-                          children: [
-                            ListTile(
-                              title: Text(
-                                category['name'],
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              trailing: subcategories.isNotEmpty
-                                  ? IconButton(
-                                icon: Icon(isExpanded
-                                    ? Icons.expand_less
-                                    : Icons.expand_more),
-                                onPressed: () {
-                                  setStateModal(() {
-                                    expandedCategory = isExpanded ? null : category['id'];
-                                  });
-                                },
-                              )
-                                  : null,
+                      return Column(children: [
+                        ListTile(
+                          title: Text(cat['name'],
+                              style: Theme.of(context).textTheme.bodyLarge),
+                          trailing: subs.isNotEmpty
+                              ? IconButton(
+                            icon: Icon(isExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more),
+                            onPressed: () {
+                              setStateModal(() {
+                                expandedCategory =
+                                isExpanded ? null : cat['id'];
+                              });
+                            },
+                          )
+                              : null,
+                          onTap: () {
+                            setState(() {
+                              selectedCategory = cat['id'];
+                              expandedCategory = null;
+                            });
+                            widget.onSelect(cat['id']);
+                            Navigator.pop(context);
+                          },
+                        ),
+                        if (isExpanded)
+                          ...subs.map((sub) => Padding(
+                            padding: const EdgeInsets.only(left: 32),
+                            child: ListTile(
+                              title: Text(sub['name'],
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium),
                               onTap: () {
                                 setState(() {
-                                  selectedCategory = category['id'];
-                                  expandedCategory = null;
+                                  selectedCategory = sub['id'];
                                 });
-                                widget.onSelect(category['id']);
+                                widget.onSelect(sub['id']);
                                 Navigator.pop(context);
                               },
                             ),
-                            if (isExpanded)
-                              ...subcategories.map((sub) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(left: 32.0),
-                                  child: ListTile(
-                                    title: Text(
-                                      sub['name'],
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                    ),
-                                    onTap: () {
-                                      setState(() {
-                                        selectedCategory = sub['id'];
-                                      });
-                                      widget.onSelect(sub['id']);
-                                      Navigator.pop(context);
-                                    },
-                                  ),
-                                );
-                              }).toList(),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                          )),
+                      ]);
+                    }).toList(),
                   ),
-                  const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: _addNewCategory,
-                    icon: const Icon(Icons.add),
-                    label: Text("add_category".tr()),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+                ),
+              ],
+            ),
+          );
+        });
       },
     );
-  }
-
-  void _addNewCategory() {
-    // Aquí iría la lógica para añadir nueva categoría
   }
 }

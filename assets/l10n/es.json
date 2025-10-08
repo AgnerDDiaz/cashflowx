@@ -78,6 +78,12 @@
   "appearance": "Apariencia",
   "system_default": "Sistema predeterminado",
   "notifications": "Notificaciones",
+  "manage_scheduled_transactions": "Administrar transacciones recurrentes",
+  "settings_updated": "Ajustes actualizados",
+  "add": "Agregar",
+  "edit": "Editar",
+  "save": "Guardar",
+  "are_you_sure": "¿Estás seguro?",
   "scheduled": {
     "title": "Transacciones Recurrentes",
     "empty": "No hay transacciones recurrentes.",

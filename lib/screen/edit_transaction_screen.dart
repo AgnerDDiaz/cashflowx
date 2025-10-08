@@ -11,6 +11,8 @@ import '../utils/settings_helper.dart';
 
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
+import '../widgets/selectors/currency_selector.dart';
+
 import '../screen/select_currency_screen.dart';
 
 import '../models/transaction.dart'; // AppTransaction
@@ -188,7 +190,14 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 1,
-                  child: _buildCurrencyDropdown(),
+                  child: CurrencySelector(
+                    currencies: availableCurrencies.map((c) => {"code": c, "name": ""}).toList(),
+                    initialSelectedCode: selectedCurrency,
+                    onSelect: (code) {
+                      setState(() => selectedCurrency = code);
+                      _updateConvertedAmount(); // <<< conserva el preview
+                    },
+                  ),
                 ),
               ],
             ),
@@ -236,44 +245,6 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCurrencyDropdown() {
-    final List<DropdownMenuItem<String>> items = [
-      ...availableCurrencies.map((code) => DropdownMenuItem(
-        value: code,
-        child: Text(code, overflow: TextOverflow.ellipsis),
-      )),
-      DropdownMenuItem(value: 'other', child: Text("other_currency".tr())),
-      if (!availableCurrencies.contains(selectedCurrency) && selectedCurrency != 'other')
-        DropdownMenuItem(value: selectedCurrency, child: Text(selectedCurrency, overflow: TextOverflow.ellipsis)),
-    ];
-
-    return DropdownButtonFormField<String>(
-      value: selectedCurrency,
-      items: items,
-      onChanged: (value) async {
-        if (value == null) return;
-        if (value == 'other') {
-          final selected = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SelectCurrencyScreen()),
-          );
-          if (selected != null && selected is String) {
-            setState(() => selectedCurrency = selected);
-            _updateConvertedAmount();
-          }
-        } else {
-          setState(() => selectedCurrency = value);
-          _updateConvertedAmount();
-        }
-      },
-      decoration: InputDecoration(
-        labelText: '',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-      ),
-      isExpanded: true,
     );
   }
 

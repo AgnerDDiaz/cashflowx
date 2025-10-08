@@ -11,6 +11,7 @@ import '../utils/app_colors.dart';
 
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
+import '../widgets/selectors/currency_selector.dart';
 import '../screen/select_currency_screen.dart';
 
 class AddTransactionScreen extends StatefulWidget {
@@ -197,7 +198,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 2,
-                  child: _buildCurrencyDropdown(),
+                  child: CurrencySelector(
+                    currencies: availableCurrencies.map((c) => {"code": c, "name": ""}).toList(),
+                    initialSelectedCode: selectedCurrency,
+                    onSelect: (code) {
+                      setState(() => selectedCurrency = code);
+                      _updateConvertedAmount(); // <<< mantiene el preview ≈
+                    },
+                  ),
                 ),
               ],
             ),
@@ -235,41 +243,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCurrencyDropdown() {
-    final items = <DropdownMenuItem<String>>[
-      ...availableCurrencies.map((code) => DropdownMenuItem(value: code, child: Text(code))),
-      DropdownMenuItem(value: 'other', child: Text("other_currency".tr())),
-      if (!availableCurrencies.contains(selectedCurrency) && selectedCurrency != 'other')
-        DropdownMenuItem(value: selectedCurrency, child: Text(selectedCurrency)),
-    ];
-
-    return DropdownButtonFormField<String>(
-      value: selectedCurrency,
-      items: items,
-      onChanged: (value) async {
-        if (value == null) return;
-        if (value == 'other') {
-          final selected = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SelectCurrencyScreen()),
-          );
-          if (selected != null && selected is String) {
-            setState(() => selectedCurrency = selected);
-            _updateConvertedAmount();
-          }
-        } else {
-          setState(() => selectedCurrency = value);
-          _updateConvertedAmount();
-        }
-      },
-      decoration: InputDecoration(
-        labelText: "currency".tr(),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-      ),
-      isExpanded: true,
     );
   }
 

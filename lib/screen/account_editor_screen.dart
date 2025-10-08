@@ -89,23 +89,13 @@ class _AccountEditorScreenState extends State<AccountEditorScreen> {
                 Text('select_currency'.tr(), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 CurrencySelector(
-                  currencies: _quickCurrencies,
-                  selectedCurrency: _currency,
-                  onChanged: (value) {
-                    setState(() => _currency = value);
-                    Navigator.pop(ctx);
-                  },
-                  onOtherSelected: () async {
-                    final result = await Navigator.push<String>(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SearchCurrencyFromApiScreen()),
-                    );
-                    if (result != null && result.isNotEmpty) {
-                      setState(() => _currency = result);
-                    }
-                    if (mounted) Navigator.pop(ctx);
+                  currencies: _quickCurrencies.map((c) => {"code": c, "name": ""}).toList(),
+                  initialSelectedCode: _currency,
+                  onSelect: (code) {
+                    setState(() => _currency = code);
                   },
                 ),
+
               ],
             ),
           ),

@@ -186,8 +186,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           ListTile(
             leading: const Icon(Icons.repeat),
-            title: const Text("Transacciones Recurrentes"),
-            subtitle: const Text("Ver, activar o editar transacciones automáticas"),
+            title: Text(trOr('scheduled_transactions', 'Scheduled transactions')),
+            subtitle: Text(trOr('manage_scheduled_transactions', 'Manage scheduled transactions')),
             onTap: () {
               Navigator.push(
                 context,

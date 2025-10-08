@@ -78,6 +78,13 @@
   "appearance": "Appearance",
   "system_default": "System default",
   "notifications": "Notifications",
+  "manage_scheduled_transactions": "Manage scheduled transactions",
+  "settings_updated": "Settings updated",
+  "add": "Add",
+  "edit": "Edit",
+  "save": "Save",
+  "are_you_sure": "Are you sure?",
+
   "scheduled": {
     "title": "Recurring Transactions",
     "empty": "No recurring transactions.",
