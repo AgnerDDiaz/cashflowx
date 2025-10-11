@@ -242,6 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // --- Primer día de la semana (tile estándar) ---
           WeekStartTile(
+            key: ValueKey('weekstart-$_firstDay'), // 👈 fuerza rebuild cuando _firstDay cambia
             initialValue: _firstDay, // 'monday' | 'sunday'
             onChanged: (v) async {
               await SettingsHelper().setFirstWeekday(v);

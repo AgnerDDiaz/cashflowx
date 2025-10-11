@@ -120,19 +120,21 @@ class SettingsHelper {
     await db.update('settings', { _kFirstWeekdayCol: 'monday' }, where: 'id = 1');
   }
 
+  // utils/settings_helper.dart
   Future<String> getFirstWeekday() async {
     await _ensureFirstWeekdayColumn();
     final db = await _dbHelper.database;
     final result = await db.query('settings', columns: [_kFirstWeekdayCol], where: 'id = 1', limit: 1);
-    final value = (result.isNotEmpty ? result.first[_kFirstWeekdayCol] : null) as String?;
-    if (value == 'sunday') return 'sunday';
-    return 'monday';
+    final raw = (result.isNotEmpty ? result.first[_kFirstWeekdayCol] : null) as String?;
+    final v = (raw ?? 'monday').toLowerCase().trim();
+    return (v == 'sunday') ? 'sunday' : 'monday';
   }
 
   Future<void> setFirstWeekday(String value) async {
-    final v = (value.toLowerCase() == 'sunday') ? 'sunday' : 'monday';
+    final v = value.toLowerCase().trim() == 'sunday' ? 'sunday' : 'monday';
     await _ensureFirstWeekdayColumn();
     final db = await _dbHelper.database;
     await db.update('settings', { _kFirstWeekdayCol: v }, where: 'id = 1');
   }
+
 }

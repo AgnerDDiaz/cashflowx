@@ -107,6 +107,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               });
               _loadTransactions();
             },
+            firsWeekday: _firstWeekday,
           ),
           FutureBuilder(
             future: _buildBalanceValues(),

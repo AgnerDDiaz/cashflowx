@@ -47,6 +47,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   double expenses = 0.0;
   String mainCurrency = 'USD';
   String selectedFilter = 'monthly';
+  String firstWeekday = 'monday';
+
   DateTime selectedDate = DateTime.now();
 
   List<Map<String, dynamic>> accounts = [];
@@ -118,6 +120,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
   Future<void> _loadData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'USD';
+    firstWeekday = await SettingsHelper().getFirstWeekday();
 
     // Cargamos cuentas/categorías como Maps para no romper los widgets existentes
     final accModels = await _accRepo.getAll();
@@ -376,6 +379,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                 });
                 _loadTransactions();
               },
+              firsWeekday: firstWeekday,
             ),
             const SizedBox(height: 10),
             BalanceSection(

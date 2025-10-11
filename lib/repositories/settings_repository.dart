@@ -14,7 +14,7 @@ class SettingsRepository {
       final defaultRow = {
         'main_currency': 'USD',
         'secondary_currency': 'DOP',
-        'first_day_of_week': 'Monday',
+        'first_day_of_week': 'monday',
         'first_day_of_month': '1st',
         'default_view': 'weekly',
         'backup_enabled': 0,

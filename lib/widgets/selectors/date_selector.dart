@@ -8,12 +8,15 @@ class DateSelector extends StatefulWidget {
   final DateTime initialDate;
   final String initialFilter;
   final Function(DateTime, String) onDateChanged;
+  final String firsWeekday;
+
 
   const DateSelector({
     Key? key,
     required this.initialDate,
     required this.initialFilter,
     required this.onDateChanged,
+    this.firsWeekday = 'monday',
   }) : super(key: key);
 
   @override
@@ -24,6 +27,16 @@ class _DateSelectorState extends State<DateSelector> {
   late DateTime selectedDate;
   late String selectedFilter;
 
+  int _startWd() =>
+      (widget.firsWeekday.toLowerCase() == 'sunday') ? DateTime.sunday : DateTime.monday;
+
+  DateTime _weekStart(DateTime d) {
+    final int startWd = _startWd();
+    final int delta = ((d.weekday - startWd) % 7 + 7) % 7;
+    final local = DateTime(d.year, d.month, d.day);
+    return local.subtract(Duration(days: delta));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +46,7 @@ class _DateSelectorState extends State<DateSelector> {
 
   String _formatDate(DateTime date, String filter) {
     if (filter == 'weekly') {
-      DateTime start = date.subtract(Duration(days: date.weekday - 1));
+      DateTime start = _weekStart(date);
       DateTime end = start.add(const Duration(days: 6));
       return "${DateFormat('d/MM').format(start)} ~ ${DateFormat('d/MM').format(end)}";
     } else if (filter == 'monthly' || filter == 'calendar') {
