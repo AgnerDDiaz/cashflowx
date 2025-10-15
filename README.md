@@ -1,4 +1,4 @@
-# 💸 CashFlowX
+# CashFlowX
 
 [![Flutter](https://img.shields.io/badge/Framework-Flutter-blue)](https://flutter.dev/)
 [![Firebase](https://img.shields.io/badge/Backend-Firebase-orange)](https://firebase.google.com/)
@@ -10,7 +10,7 @@
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 - 💰 **Transactions Management** — Add, edit, and delete incomes, expenses, or transfers with full control.
 - 🏦 **Multiple Accounts** — Handle personal, business, savings, or credit card accounts.
@@ -24,7 +24,7 @@
 
 ---
 
-## 🧠 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-------------|
@@ -39,7 +39,7 @@
 
 ---
 
-## 📱 App Preview
+## App Preview
 
 | Dashboard | Calendar | Accounts |
 |------------|-----------|----------|
@@ -57,7 +57,7 @@
 
 ---
 
-## 🧩 Project Structure
+## Project Structure
 
 ```
 lib/
@@ -71,7 +71,7 @@ lib/
 
 ---
 
-## ⚙️ Installation & Setup
+## Installation & Setup
 
 ### Requirements
 - Flutter SDK 3.x+
@@ -97,17 +97,17 @@ flutter run
 
 ---
 
-## 🎯 Project Objective
+## Project Objective
 
 CashFlowX was built to create a **simple yet powerful financial manager** that adapts to the lifestyle of young professionals.  
 The mission is to promote healthy financial habits through design, usability, and technology — turning complex money management into something effortless and enjoyable.
 
 ---
 
-## 📈 Project Status
+## Project Status
 
-🚧 **In active development**  
-🧪 **Beta version** — currently being finalized for Play Store & App Store release.  
+**In active development**  
+**Beta version** — currently being finalized for Play Store & App Store release.  
 
 ### Upcoming Features
 - Export reports to **CSV / PDF**
@@ -129,7 +129,7 @@ Software Engineering Student | Flutter Developer
 
 ---
 
-## 🪪 License
+## License
 
 This project is licensed under the **MIT License**.  
 © 2025 Agner David Díaz Encarnación.
