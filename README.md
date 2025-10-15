@@ -59,3 +59,74 @@
 
 ## 🧩 Project Structure
 
+lib/
+├── models/ # Core data models (Transaction, Account, Category)
+├── screens/ # Main UI screens (Home, Calendar, Settings, etc.)
+├── widgets/ # Reusable Flutter widgets
+├── providers/ # State management using Provider
+├── utils/ # Formatters, constants, and helpers
+└── main.dart # Entry point
+
+---
+
+## ⚙️ Installation & Setup
+
+### Requirements
+- Flutter SDK 3.x+
+- Dart >= 3.0
+- Android Studio or VS Code
+- Emulator or physical device
+
+### Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/agnerdiaz/CashFlowX.git
+
+# Enter the project folder
+cd CashFlowX
+
+# Install dependencies
+flutter pub get
+
+# Run the app
+flutter run
+
+🎯 Project Objective
+
+CashFlowX was built to create a simple yet powerful financial manager that adapts to the lifestyle of young professionals.
+The mission is to promote healthy financial habits through design, usability, and technology — turning complex money management into something effortless and enjoyable.
+
+📈 Project Status
+
+🚧 In active development
+🧪 Beta version — currently being finalized for Play Store & App Store release.
+
+Upcoming Features
+
+Export reports to CSV / PDF
+
+Smart notifications for budget alerts
+
+Multi-device synchronization
+
+Advanced analytics dashboard
+
+👤 Developer
+
+Agner David Díaz Encarnación
+Software Engineering Student | Flutter Developer
+📍 San Cristóbal, Dominican Republic
+
+💼 LinkedIn
+
+💻 GitHub
+
+✉️ agnerdiaz.dev@gmail.com
+
+🪪 License
+
+This project is licensed under the MIT License.
+© 2025 Agner David Díaz Encarnación.
+
+"CashFlowX was designed to transform how people understand and manage their money — combining simplicity, design, and power in one seamless experience."
