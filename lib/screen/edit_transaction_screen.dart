@@ -13,8 +13,6 @@ import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
 import '../widgets/selectors/currency_selector.dart';
 
-import '../screen/select_currency_screen.dart';
-
 import '../models/transaction.dart'; // AppTransaction
 
 class EditTransactionScreen extends StatefulWidget {
@@ -75,22 +73,26 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
 
   Future<void> _loadInitialData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
-
-    // Traer códigos de monedas desde la BD (tabla exchange_rates)
-    List<String> codes = await _ratesRepo.allBaseCurrencyCodes();
-    codes = codes.toSet().toList();
-
-    // Asegurar presencia de principales
-    for (final must in [mainCurrency!, 'USD', 'DOP']) {
-      if (!codes.contains(must)) codes.add(must);
-    }
-
+    final list = await _buildAvailableCurrencies(mainCurrency!);
     setState(() {
-      availableCurrencies = codes.take(6).toList();
+      availableCurrencies = list; // lista completa, main primero
     });
-
     _updateConvertedAmount();
   }
+
+  Future<List<String>> _buildAvailableCurrencies(String main) async {
+    final codes = await _ratesRepo.allCurrencies(); // base + target desde el repo
+    final set = <String>{...codes, main};           // garantía de presencia de main
+    final list = set.toList()
+      ..sort((a, b) {
+        if (a == main) return -1;
+        if (b == main) return 1;
+        return a.compareTo(b);
+      });
+    return list;
+  }
+
+
 
   void _updateConvertedAmount() async {
     if (amountController.text.isEmpty || mainCurrency == null) {
@@ -195,9 +197,17 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
                     initialSelectedCode: selectedCurrency,
                     onSelect: (code) {
                       setState(() => selectedCurrency = code);
-                      _updateConvertedAmount(); // <<< conserva el preview
+                      _updateConvertedAmount();
+                    },
+                    onAddSelected: (code) {
+                      if (!availableCurrencies.contains(code)) {
+                        setState(() => availableCurrencies = [code, ...availableCurrencies]);
+                      }
+                      setState(() => selectedCurrency = code);
+                      _updateConvertedAmount();
                     },
                   ),
+
                 ),
               ],
             ),

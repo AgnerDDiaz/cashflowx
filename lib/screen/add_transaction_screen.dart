@@ -12,7 +12,6 @@ import '../utils/app_colors.dart';
 import '../widgets/selectors/account_selector.dart';
 import '../widgets/selectors/category_selector.dart';
 import '../widgets/selectors/currency_selector.dart';
-import '../screen/select_currency_screen.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;   // seguimos usando Map para no romper selectores
@@ -75,21 +74,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _loadInitialData() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
 
-    // Monedas disponibles (de la tabla exchange_rates)
-    List<String> codes = await _ratesRepo.allBaseCurrencyCodes();
-    codes = codes.toSet().toList(); // únicos
-    // Aseguramos presencia de principales
-    for (final must in [mainCurrency!, 'USD', 'DOP']) {
-      if (!codes.contains(must)) codes.add(must);
-    }
+    final list = await _buildAvailableCurrencies(mainCurrency!);
 
     setState(() {
       selectedCurrency = mainCurrency!;
-      availableCurrencies = codes.take(6).toList();
+      availableCurrencies = list; // ← lista completa, sin truncar
     });
 
     _updateConvertedAmount();
   }
+
+  Future<List<String>> _buildAvailableCurrencies(String main) async {
+    final codes = await _ratesRepo.allCurrencies(); // base + target desde repo
+    final set = <String>{...codes, main}; // garantiza presencia de la principal
+    final list = set.toList()
+      ..sort((a, b) {
+        if (a == main) return -1;
+        if (b == main) return 1;
+        return a.compareTo(b);
+      });
+    return list;
+  }
+
+
 
   void _updateConvertedAmount() async {
     if (amountController.text.isEmpty || mainCurrency == null) {
@@ -203,9 +210,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     initialSelectedCode: selectedCurrency,
                     onSelect: (code) {
                       setState(() => selectedCurrency = code);
-                      _updateConvertedAmount(); // <<< mantiene el preview ≈
+                      _updateConvertedAmount();
+                    },
+                    onAddSelected: (code) {
+                      if (!availableCurrencies.contains(code)) {
+                        setState(() => availableCurrencies = [code, ...availableCurrencies]);
+                      }
+                      // Si quieres que quede seleccionada de inmediato, ya lo hace CurrencySelector,
+                      // pero mantenemos el estado local por coherencia:
+                      setState(() => selectedCurrency = code);
+                      _updateConvertedAmount();
                     },
                   ),
+
                 ),
               ],
             ),
