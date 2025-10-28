@@ -1,4 +1,4 @@
-# 💸 CashFlowX
+# CashFlowX
 
 [![Flutter](https://img.shields.io/badge/Framework-Flutter-blue)](https://flutter.dev/)
 [![Firebase](https://img.shields.io/badge/Backend-Firebase-orange)](https://firebase.google.com/)
@@ -10,7 +10,7 @@
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 - 💰 **Transactions Management** — Add, edit, and delete incomes, expenses, or transfers with full control.
 - 🏦 **Multiple Accounts** — Handle personal, business, savings, or credit card accounts.
@@ -24,7 +24,7 @@
 
 ---
 
-## 🧠 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-------------|
@@ -39,7 +39,7 @@
 
 ---
 
-## 📱 App Preview
+## App Preview
 
 | Dashboard | Calendar | Accounts |
 |------------|-----------|----------|
@@ -57,19 +57,21 @@
 
 ---
 
-## 🧩 Project Structure
+## Project Structure
 
+```
 lib/
-├── models/ # Core data models (Transaction, Account, Category)
-├── screens/ # Main UI screens (Home, Calendar, Settings, etc.)
-├── widgets/ # Reusable Flutter widgets
-├── providers/ # State management using Provider
-├── utils/ # Formatters, constants, and helpers
-└── main.dart # Entry point
+├── models/              # Core data models (Transaction, Account, Category)
+├── screens/             # Main UI screens (Home, Calendar, Settings, etc.)
+├── widgets/             # Reusable Flutter widgets
+├── providers/           # State management using Provider
+├── utils/               # Formatters, constants, and helpers
+└── main.dart            # Entry point
+```
 
 ---
 
-## ⚙️ Installation & Setup
+## Installation & Setup
 
 ### Requirements
 - Flutter SDK 3.x+
@@ -91,42 +93,47 @@ flutter pub get
 
 # Run the app
 flutter run
+```
 
-🎯 Project Objective
+---
 
-CashFlowX was built to create a simple yet powerful financial manager that adapts to the lifestyle of young professionals.
+## Project Objective
+
+CashFlowX was built to create a **simple yet powerful financial manager** that adapts to the lifestyle of young professionals.  
 The mission is to promote healthy financial habits through design, usability, and technology — turning complex money management into something effortless and enjoyable.
 
-📈 Project Status
+---
 
-🚧 In active development
-🧪 Beta version — currently being finalized for Play Store & App Store release.
+## Project Status
 
-Upcoming Features
+**In active development**  
+**Beta version** — currently being finalized for Play Store & App Store release.  
 
-Export reports to CSV / PDF
+### Upcoming Features
+- Export reports to **CSV / PDF**
+- **Smart notifications** for budget alerts
+- **Multi-device synchronization**
+- **Advanced analytics dashboard**
 
-Smart notifications for budget alerts
+---
 
-Multi-device synchronization
+## 👤 Developer
 
-Advanced analytics dashboard
+**Agner David Díaz Encarnación**  
+Software Engineering Student | Flutter Developer  
+📍 San Cristóbal, Dominican Republic  
 
-👤 Developer
+- 💼 [LinkedIn](https://www.linkedin.com/in/agnerdiaz)  
+- 💻 [GitHub](https://github.com/agner)  
+- ✉️ agnerdiazenc@gmail.com  
 
-Agner David Díaz Encarnación
-Software Engineering Student | Flutter Developer
-📍 San Cristóbal, Dominican Republic
+---
 
-💼 LinkedIn
+## License
 
-💻 GitHub
-
-✉️ agnerdiaz.dev@gmail.com
-
-🪪 License
-
-This project is licensed under the MIT License.
+This project is licensed under the **MIT License**.  
 © 2025 Agner David Díaz Encarnación.
 
-"CashFlowX was designed to transform how people understand and manage their money — combining simplicity, design, and power in one seamless experience."
+---
+
+> *"CashFlowX was designed to transform how people understand and manage their money — combining simplicity, design, and power in one seamless experience."*
