@@ -8,6 +8,8 @@ environment:
   sdk: ^3.6.1
 
 dependencies:
+  file_picker: ^8.0.6
+  share_plus: ^9.0.0
   easy_localization: ^3.0.3
   flutter:
     sdk: flutter

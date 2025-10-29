@@ -10,6 +10,10 @@ import '../widgets/selectors/week_start_selector.dart';
 
 import 'package:cashflowx/utils/database_helper.dart';
 
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:cashflowx/utils/database_helper.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -33,6 +37,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLang();
     _loadTheme();
   }
+
+  Future<void> _exportBackup() async {
+    try {
+      final dbh = DatabaseHelper();
+      final tempPath = await dbh.exportDatabaseToTemp();
+      await Share.shareXFiles([XFile(tempPath)], text: trOr('backup_share_msg', 'Respaldo de CashFlowX'));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(trOr('backup_error_export', 'Error al exportar el respaldo: ') + e.toString())),
+      );
+    }
+  }
+
+  Future<void> _importBackup() async {
+    // Confirmación
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(trOr('backup_import_title', 'Importar respaldo')),
+        content: Text(trOr('backup_import_msg',
+            'Esto reemplazará TODOS tus datos locales por el archivo seleccionado. ¿Deseas continuar?')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(trOr('cancel', 'Cancelar'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(trOr('confirm', 'Confirmar'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['db', 'sqlite', 'cfxdb'],
+        withData: false,
+      );
+      if (res == null || res.files.isEmpty) return;
+
+      final path = res.files.single.path;
+      if (path == null) return;
+
+      final dbh = DatabaseHelper();
+      await dbh.importDatabaseFrom(path);
+
+      // refrescar ajustes visibles tras importar
+      if (!mounted) return;
+      await _loadPrefs();
+      await _loadLang();
+      await _loadTheme();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(trOr('backup_import_done', 'Respaldo importado correctamente'))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(trOr('backup_error_import', 'Error al importar el respaldo: ') + e.toString())),
+      );
+    }
+  }
+
 
   Future<void> _resetDatabaseDev() async {
     // 1) Confirmación
@@ -355,6 +420,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // TODO: configuración de notificaciones
             },
           ),
+          const Divider(height: 1),
+
+          // ================== Respaldo (Backup) ==================
+          ListTile(
+            leading: const Icon(Icons.file_upload_outlined),
+            title: Text(trOr('backup_export', 'Exportar respaldo')),
+            subtitle: Text(trOr('backup_export_sub', 'Comparte un archivo .db con tus datos')),
+            onTap: _exportBackup,
+          ),
+          ListTile(
+            leading: const Icon(Icons.file_download_outlined),
+            title: Text(trOr('backup_import', 'Importar respaldo')),
+            subtitle: Text(trOr('backup_import_sub', 'Reemplaza tus datos con un archivo .db')),
+            onTap: _importBackup,
+          ),
+
           const Divider(height: 1),
 
           // ================== Herramientas de desarrollo ==================

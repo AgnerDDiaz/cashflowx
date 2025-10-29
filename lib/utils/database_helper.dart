@@ -1,8 +1,10 @@
 // lib/utils/database_helper.dart
+import 'dart:io';
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode
+import 'package:path_provider/path_provider.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -722,6 +724,60 @@ class DatabaseHelper {
       }
     }
   }
+
+  /// Ruta absoluta del archivo SQLite actual.
+  Future<String> getDatabasePath() async {
+    return join(await getDatabasesPath(), 'cashflowx.db');
+  }
+
+  /// Exporta una copia del .db a un archivo temporal y la devuelve.
+  /// Úsalo para compartir/guardar con un picker del SO.
+  Future<String> exportDatabaseToTemp({String? fileName}) async {
+    final src = await getDatabasePath();
+    final tmpDir = await getTemporaryDirectory();
+    final name = fileName ?? 'cashflowx_backup_${DateTime.now().millisecondsSinceEpoch}.db';
+    final dst = join(tmpDir.path, name);
+
+    // Asegura que no haya conexiones pendientes al leer
+    await _database?.close();
+    _database = null;
+
+    await File(src).copy(dst);
+    // Reabrimos para que la app siga funcionando normalmente
+    await database;
+    return dst;
+  }
+
+  /// Restaura la base desde un archivo .db proporcionado (ruta absoluta).
+  /// Cierra la conexión, reemplaza el archivo y reabre.
+  Future<void> importDatabaseFrom(String backupPath) async {
+    final dst = await getDatabasePath();
+
+    // Cerrar conexión actual
+    if (_database != null && _database!.isOpen) {
+      await _database!.close();
+    }
+    _database = null;
+
+    // Reemplazar archivo
+    final backupFile = File(backupPath);
+    if (!await backupFile.exists()) {
+      throw Exception('Backup file not found');
+    }
+
+    // Validación muy simple de tamaño > 0 (evita sobrescribir con vacío)
+    final stat = await backupFile.stat();
+    if (stat.size <= 0) {
+      throw Exception('Backup file is empty');
+    }
+
+    // Copiar (sobreescribir)
+    await backupFile.copy(dst);
+
+    // Reabrir para que onUpgrade corra si la versión cambió
+    await database;
+  }
+
 
   // utilidades
   Future<void> closeDatabase() async {

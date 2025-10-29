@@ -143,7 +143,20 @@
   "reset_db_msg": "Esto borrará TODOS los datos locales y recreará la base limpia con las semillas de desarrollo (cuentas en 0, sin transacciones). ¿Seguro?",
   "reset_db_subtitle": "Borra todo y recrea semillas (dev)",
   "reset_db_done": "Base de datos reiniciada correctamente",
-  "confirm": "Confirmar"
+  "confirm": "Confirmar",
+
+  "backup_export": "Exportar respaldo",
+  "backup_export_sub": "Comparte un archivo .db con tus datos",
+  "backup_import": "Importar respaldo",
+  "backup_import_sub": "Reemplaza tus datos con un archivo .db",
+  "backup_share_msg": "Respaldo de CashFlowX",
+  "backup_import_title": "Importar respaldo",
+  "backup_import_msg": "Esto reemplazará TODOS tus datos locales por el archivo seleccionado. ¿Deseas continuar?",
+  "backup_import_done": "Respaldo importado correctamente",
+  "backup_error_export": "Error al exportar el respaldo: ",
+  "backup_error_import": "Error al importar el respaldo: "
+
+
 
 }
 

@@ -147,7 +147,18 @@
   "reset_db_msg": "This will DELETE ALL local data and recreate a clean database with dev seeds (zeroed accounts, no transactions). Are you sure?",
   "reset_db_subtitle": "Wipe and reseed (dev)",
   "reset_db_done": "Database successfully reset",
-  "confirm": "Confirm"
+  "confirm": "Confirm",
+  "backup_export": "Export backup",
+  "backup_export_sub": "Share a .db file with your data",
+  "backup_import": "Import backup",
+  "backup_import_sub": "Replace your data from a .db file",
+  "backup_share_msg": "CashFlowX Backup",
+  "backup_import_title": "Import backup",
+  "backup_import_msg": "This will REPLACE ALL your local data with the selected file. Continue?",
+  "backup_import_done": "Backup imported successfully",
+  "backup_error_export": "Backup export failed: ",
+  "backup_error_import": "Backup import failed: "
+
 
 
 }
