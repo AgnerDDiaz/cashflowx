@@ -136,28 +136,31 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
     if (mounted) setState(() => _loading = false);
   }
 
-  /// Semilla de “monedas rápidas” para que coincida con Add/Edit
-  static const List<String> _quickCurrencySeed = [
-    'USD', 'EUR', 'GBP', 'CAD', 'JPY', 'MXN', 'DOP'
-  ];
-
-  /// Construye la lista final: quick + todas las del repo (base/target) + monedas de cuentas.
+  /// Construye la lista final a partir del repositorio y monedas de cuentas,
+  /// garantizando que la moneda principal esté incluida y ordenando con
+  /// la principal primero y el resto alfabético.
   Future<List<String>> _buildCurrencyList() async {
-    final fromRepo = await _ratesRepo.allCurrencies();                 // usa base_currency/target_currency
+    final fromRepo = await _ratesRepo.allCurrencies(); // base + target (fuente única)
     final fromAccounts = _accounts
         .map((a) => (a['currency'] ?? '').toString().trim())
         .where((c) => c.isNotEmpty);
 
     final set = <String>{
-      ..._quickCurrencySeed,
       ...fromRepo,
       ...fromAccounts,
-      _mainCurrency, // garantizamos main
+      _mainCurrency, // garantiza presencia de la principal
     };
 
-    final list = set.toList()..sort();
+    final list = set.toList()
+      ..sort((a, b) {
+        if (a == _mainCurrency) return -1;
+        if (b == _mainCurrency) return 1;
+        return a.compareTo(b);
+      });
+
     return list;
   }
+
 
   // === helpers ===
   Future<void> _recalcPreview() async {
@@ -326,6 +329,13 @@ class _EditScheduledTransactionScreenState extends State<EditScheduledTransactio
                     currencies: _currencies.map((c) => {"code": c, "name": ""}).toList(),
                     initialSelectedCode: _currency,
                     onSelect: (code) {
+                      setState(() => _currency = code);
+                      _recalcPreview();
+                    },
+                    onAddSelected: (code) {
+                      if (!_currencies.contains(code)) {
+                        setState(() => _currencies = [code, ..._currencies]);
+                      }
                       setState(() => _currency = code);
                       _recalcPreview();
                     },

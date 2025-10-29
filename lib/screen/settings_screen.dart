@@ -8,6 +8,9 @@ import 'package:cashflowx/screen/select_currency_screen.dart';
 // Tile estándar para “Primer día de la semana”
 import '../widgets/selectors/week_start_selector.dart';
 
+import 'package:cashflowx/utils/database_helper.dart';
+
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
 
@@ -30,6 +33,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLang();
     _loadTheme();
   }
+
+  Future<void> _resetDatabaseDev() async {
+    // 1) Confirmación
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(trOr('reset_db_title', 'Reiniciar base de datos')),
+        content: Text(trOr('reset_db_msg',
+            'Esto borrará TODOS los datos locales y recreará la base limpia con las semillas de desarrollo (cuentas en 0, sin transacciones). ¿Seguro?')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(trOr('cancel', 'Cancelar'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(trOr('confirm', 'Confirmar'))),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    // 2) Borrar y recrear
+    final dbh = DatabaseHelper();
+    await dbh.resetDatabase();     // borra el archivo
+    await dbh.database;            // re-crea (onCreate v13: USD/EUR/DOP, grupos, cuentas en 0, sin transacciones)
+
+    // 3) Refrescar labels visibles en Settings
+    await _loadPrefs();
+    await _loadLang();
+    await _loadTheme();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(trOr('reset_db_done', 'Base de datos reiniciada correctamente'))),
+    );
+  }
+
 
   Future<void> _loadLang() async {
     _languageCode = await SettingsHelper().getLanguageCode();
@@ -319,7 +356,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           const Divider(height: 1),
-        ],
+
+          // ================== Herramientas de desarrollo ==================
+            ListTile(
+              leading: const Icon(Icons.delete_forever_outlined),
+              title: Text(trOr('reset_db_title', 'Reiniciar base de datos')),
+              subtitle: Text(trOr('reset_db_subtitle', 'Borra todo y recrea semillas (dev)')),
+              onTap: _resetDatabaseDev,
+            ),
+          ],
       ),
     );
   }

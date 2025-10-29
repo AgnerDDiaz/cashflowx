@@ -1,3 +1,4 @@
+// lib/utils/database_helper.dart
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -22,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 12, // v12: recurrencias robustas (is_active, error log, tz, índices) + scheduled_id en transactions
+      version: 13, // v13: credit_cards_meta + semillas USD/EUR/DOP + cuentas en 0 (solo dev) + sin transacciones de prueba
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -193,7 +194,7 @@ class DatabaseHelper {
       );
     ''');
 
-    // settings + fila por defecto
+    // settings + fila por defecto (USD principal)
     await db.execute('''
       CREATE TABLE settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -214,7 +215,7 @@ class DatabaseHelper {
     ''');
     await db.insert('settings', {
       'main_currency': 'USD',
-      'secondary_currency': 'DOP',
+      'secondary_currency': 'DOP', // puedes cambiar a 'EUR' si prefieres
       'first_day_of_week': 'Monday',
       'first_day_of_month': '1st',
       'default_view': 'weekly',
@@ -238,28 +239,40 @@ class DatabaseHelper {
       );
     ''');
 
-    // currency_names
+    // currency_names (SOLO 3 monedas)
     await db.execute('''
       CREATE TABLE currency_names (
         code TEXT PRIMARY KEY,
         name TEXT
       );
     ''');
-
-    // seeds base de monedas
     await db.insert('currency_names', {'code': 'USD', 'name': 'United States Dollar'});
-    await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'});
     await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'});
-    await db.insert('currency_names', {'code': 'JPY', 'name': 'Japanese Yen'});
+    await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'});
 
-    // categorías por defecto
+    // ---- NUEVO: Tabla de metadatos para tarjetas de crédito ----
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS credit_cards_meta (
+        account_id INTEGER PRIMARY KEY,
+        statement_day INTEGER NULL,
+        due_day INTEGER NULL,
+        statement_due REAL NOT NULL DEFAULT 0,
+        post_statement REAL NOT NULL DEFAULT 0,
+        credit_limit REAL NULL,
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+      );
+    ''');
+
+    // categorías por defecto (mantén tu lógica actual)
     await insertCategoriesAndSubcategories(db);
 
-    // seeds SOLO en desarrollo
+    // Tipos de cambio mínimos (USD↔EUR y USD↔DOP)
+    await _seedBasicExchangeRates(db);
+
+    // ---- SEMILLAS SOLO DEV: grupos + mismas cuentas en 0.0 ----
     if (kDebugMode) {
-      await insertDevGroupsAndAccounts(db); // usa group_id
-      await insertTestTransactions(db);
-      await insertSampleExchangeRates(db);
+      await insertDevGroupsAndZeroAccounts(db);
+      // No insertamos transacciones de prueba.
     }
   }
 
@@ -488,121 +501,36 @@ class DatabaseHelper {
         WHERE scheduled_id IS NOT NULL;
       ''');
     }
-  }
 
-  // -------------------------
-  // Helpers / Seeds (solo dev)
-  // -------------------------
-  Future<void> insertSampleExchangeRates(Database db) async {
-    final rows = [
-      {'base_currency': 'USD', 'target_currency': 'DOP', 'rate': 58.5,  'last_updated': '2025-04-03'},
-      {'base_currency': 'EUR', 'target_currency': 'DOP', 'rate': 63.75, 'last_updated': '2025-04-03'},
-      {'base_currency': 'GBP', 'target_currency': 'DOP', 'rate': 74.23, 'last_updated': '2025-04-03'},
-      {'base_currency': 'CAD', 'target_currency': 'DOP', 'rate': 42.15, 'last_updated': '2025-04-03'},
-      {'base_currency': 'JPY', 'target_currency': 'DOP', 'rate': 0.53,  'last_updated': '2025-04-03'},
-      {'base_currency': 'MXN', 'target_currency': 'DOP', 'rate': 3.42,  'last_updated': '2025-04-03'},
-      {'base_currency': 'CHF', 'target_currency': 'DOP', 'rate': 64.11, 'last_updated': '2025-04-03'},
-    ];
-    for (final r in rows) { await db.insert('exchange_rates', r); }
-  }
+    // v13: asegurar tabla credit_cards_meta y semillas de monedas reducidas
+    if (oldVersion < 13) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS credit_cards_meta (
+          account_id INTEGER PRIMARY KEY,
+          statement_day INTEGER NULL,
+          due_day INTEGER NULL,
+          statement_due REAL NOT NULL DEFAULT 0,
+          post_statement REAL NOT NULL DEFAULT 0,
+          credit_limit REAL NULL,
+          FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        );
+      ''');
 
-  Future<void> insertDevGroupsAndAccounts(Database db) async {
-    final names = ['Cuentas personales','Cuentas del negocio','Ahorros','Tarjetas de crédito','Deudas'];
-    final gid = <String,int>{};
-    for (final n in names) {
-      await db.insert('account_groups', {'name': n}, conflictAlgorithm: ConflictAlgorithm.ignore);
-      final row = (await db.query('account_groups', where: 'name = ?', whereArgs: [n], limit: 1)).first;
-      gid[n] = row['id'] as int;
+      // asegurar catálogo de monedas mínimo
+      await db.insert('currency_names', {'code': 'USD', 'name': 'United States Dollar'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+      await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+      await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      // tipos de cambio mínimos
+      await _seedBasicExchangeRates(db);
     }
-
-    final accounts = [
-      {
-        'name': 'Cuenta Banreservas',
-        'type': 'normal',
-        'group_id': gid['Cuentas personales'],
-        'balance': 46.0,
-        'currency': 'DOP',
-        'balance_mode': 'default',
-        'include_in_balance': 0,
-        'visible': 0,
-      },
-      {
-        'name': 'Cuenta Popular (carrito)',
-        'type': 'normal',
-        'group_id': gid['Cuentas personales'],
-        'balance': 2260.0,
-        'currency': 'DOP',
-        'balance_mode': 'default',
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Cuenta BHD (SamTech)',
-        'type': 'normal',
-        'group_id': gid['Cuentas del negocio'],
-        'balance': 13067.0,
-        'currency': 'DOP',
-        'balance_mode': 'default',
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Tarjeta gold Banreservas',
-        'type': 'credit',
-        'group_id': gid['Tarjetas de crédito'],
-        'balance': 21324.55,
-        'currency': 'DOP',
-        'balance_mode': 'credit',
-        'max_credit': 50000.0,
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Cuenta BHD (conjunta)',
-        'type': 'credit',
-        'group_id': gid['Tarjetas de crédito'],
-        'balance': 365.00,
-        'currency': 'DOP',
-        'balance_mode': 'credit',
-        'max_credit': 10000.0,
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Tarjeta de crédito personal',
-        'type': 'credit',
-        'group_id': gid['Tarjetas de crédito'],
-        'balance': 409.00,
-        'currency': 'DOP',
-        'balance_mode': 'credit',
-        'max_credit': 50000.0,
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Deuda a Eleanny',
-        'type': 'debt',
-        'group_id': gid['Deudas'],
-        'balance': -5758.76,
-        'currency': 'USD',
-        'balance_mode': 'credit',
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-      {
-        'name': 'Fondo de emergencia',
-        'type': 'saving',
-        'group_id': gid['Ahorros'],
-        'balance': 5044.00,
-        'currency': 'DOP',
-        'balance_mode': 'default',
-        'include_in_balance': 1,
-        'visible': 1,
-      },
-    ];
-    for (final a in accounts) { await db.insert('accounts', a); }
   }
 
+  // -------------------------
+  // Seeds / Helpers
+  // -------------------------
+
+  /// Inserta categorías y subcategorías por defecto
   Future<void> insertCategoriesAndSubcategories(Database db) async {
     final defaultCategories = [
       {'name': 'Transporte', 'type': 'expense', 'parent_id': null},
@@ -650,61 +578,149 @@ class DatabaseHelper {
     }
   }
 
-  Future<void> insertTestTransactions(Database db) async {
-    Future<int?> idOfCategory(String name) async {
-      final r = await db.query('categories', columns: ['id'], where: 'name = ?', whereArgs: [name], limit: 1);
-      return r.isNotEmpty ? r.first['id'] as int : null;
+  /// Inserta tipos de cambio mínimos (USD↔EUR y USD↔DOP), reemplazando/actualizando si existen.
+  Future<void> _seedBasicExchangeRates(Database db) async {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    Future<void> put(String base, String target, double rate) async {
+      await db.insert(
+        'exchange_rates',
+        {
+          'base_currency': base,
+          'target_currency': target,
+          'rate': rate,
+          'last_updated': today,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
 
-    final rows = [
+    const usdToEur = 0.92;
+    await put('USD', 'EUR', usdToEur);
+    await put('EUR', 'USD', 1 / usdToEur);
+
+    const usdToDop = 59.5;
+    await put('USD', 'DOP', usdToDop);
+    await put('DOP', 'USD', 1 / usdToDop);
+  }
+
+  /// Crea grupos y **las mismas cuentas** pero con **saldo 0.0** (solo en dev).
+  /// Ajusta los nombres/tipos/monedas a las que ya tienes para que coincidan.
+  Future<void> insertDevGroupsAndZeroAccounts(Database db) async {
+    final names = ['Cuentas personales','Cuentas del negocio','Ahorros','Tarjetas de crédito','Deudas'];
+    final gid = <String,int>{};
+
+    // Inserta grupos si no existen
+    for (final n in names) {
+      await db.insert('account_groups', {'name': n}, conflictAlgorithm: ConflictAlgorithm.ignore);
+      final row = (await db.query('account_groups', where: 'name = ?', whereArgs: [n], limit: 1)).first;
+      gid[n] = row['id'] as int;
+    }
+
+    // MISMAS CUENTAS, PERO EN 0.0 (ajusta la lista según tus cuentas actuales)
+    final accounts = [
       {
-        'account_id': 1,
-        'type': 'expense',
-        'amount': 200.0,
+        'name': 'Cuenta Banreservas',
+        'type': 'normal',
+        'group_id': gid['Cuentas personales'],
+        'balance': 0.0,
         'currency': 'DOP',
-        'category_id': await idOfCategory('Comida'),
-        'date': '2025-03-18',
-        'note': 'Cena en restaurante'
+        'balance_mode': 'default',
+        'include_in_balance': 1,
+        'visible': 1,
       },
       {
-        'account_id': 1,
-        'type': 'expense',
-        'amount': 100.0,
+        'name': 'Cuenta Popular (carrito)',
+        'type': 'normal',
+        'group_id': gid['Cuentas personales'],
+        'balance': 0.0,
         'currency': 'DOP',
-        'category_id': await idOfCategory('Transporte'),
-        'date': '2025-03-18',
-        'note': 'Taxi'
+        'balance_mode': 'default',
+        'include_in_balance': 1,
+        'visible': 1,
       },
       {
-        'account_id': 2,
-        'type': 'income',
-        'amount': 10000.0,
+        'name': 'Cuenta BHD (SamTech)',
+        'type': 'normal',
+        'group_id': gid['Cuentas del negocio'],
+        'balance': 0.0,
         'currency': 'DOP',
-        'category_id': await idOfCategory('Sueldo'),
-        'date': '2025-03-17',
-        'note': 'Salario mensual'
+        'balance_mode': 'default',
+        'include_in_balance': 1,
+        'visible': 1,
       },
       {
-        'account_id': 3,
-        'type': 'transfer',
-        'amount': 2000.0,
+        'name': 'Tarjeta gold Banreservas',
+        'type': 'credit',
+        'group_id': gid['Tarjetas de crédito'],
+        'balance': 0.0,
         'currency': 'DOP',
-        'category_id': null,
-        'linked_account_id': 4,
-        'date': '2025-03-16',
-        'note': 'Pago de tarjeta de crédito'
+        'balance_mode': 'credit',
+        'max_credit': 50000.0,
+        'include_in_balance': 1,
+        'visible': 1,
       },
       {
-        'account_id': 4,
-        'type': 'expense',
-        'amount': 5000.0,
+        'name': 'Cuenta BHD (conjunta)',
+        'type': 'credit',
+        'group_id': gid['Tarjetas de crédito'],
+        'balance': 0.0,
         'currency': 'DOP',
-        'category_id': await idOfCategory('Deudas'),
-        'date': '2025-03-15',
-        'note': 'Pago parcial de deuda'
+        'balance_mode': 'credit',
+        'max_credit': 10000.0,
+        'include_in_balance': 1,
+        'visible': 1,
+      },
+      {
+        'name': 'Tarjeta de crédito personal',
+        'type': 'credit',
+        'group_id': gid['Tarjetas de crédito'],
+        'balance': 0.0,
+        'currency': 'DOP',
+        'balance_mode': 'credit',
+        'max_credit': 50000.0,
+        'include_in_balance': 1,
+        'visible': 1,
+      },
+      {
+        'name': 'Deuda a Eleanny',
+        'type': 'debt',
+        'group_id': gid['Deudas'],
+        'balance': 0.0,
+        'currency': 'USD',
+        'balance_mode': 'credit',
+        'include_in_balance': 1,
+        'visible': 1,
+      },
+      {
+        'name': 'Fondo de emergencia',
+        'type': 'saving',
+        'group_id': gid['Ahorros'],
+        'balance': 0.0,
+        'currency': 'DOP',
+        'balance_mode': 'default',
+        'include_in_balance': 1,
+        'visible': 1,
       },
     ];
-    for (final t in rows) { await db.insert('transactions', t); }
+
+    // Insertar cuentas y cargar metadatos de tarjetas si aplica
+    for (final a in accounts) {
+      final accId = await db.insert('accounts', a);
+      if (a['type'] == 'credit') {
+        await db.insert(
+          'credit_cards_meta',
+          {
+            'account_id': accId,
+            'statement_day': null,
+            'due_day': null,
+            'statement_due': 0.0,
+            'post_statement': 0.0,
+            'credit_limit': a['max_credit'],
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    }
   }
 
   // utilidades
@@ -713,9 +729,11 @@ class DatabaseHelper {
     await db.close();
   }
 
+  /// Elimina el archivo de base de datos. Úsalo una sola vez para empezar limpio.
   Future<void> resetDatabase() async {
     final path = join(await getDatabasesPath(), 'cashflowx.db');
     await deleteDatabase(path);
     debugPrint("Base de datos eliminada (manual).");
+    _database = null;
   }
 }

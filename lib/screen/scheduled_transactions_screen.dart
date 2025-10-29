@@ -52,31 +52,29 @@ class _ScheduledTransactionsScreenState extends State<ScheduledTransactionsScree
   }
 
   Future<void> _reload() async {
-    final data = await _repo.all(orderBy: 'frequency ASC, type ASC, next_run ASC');
-    if (!mounted) return;
-    _activeOverrides.clear(); // resetea overrides al sincronizar
-    setState(() => _future = Future.value(data));
-    await _loadAccountsCache(); // por si cambió un nombre
-    // pequeño delay para que el RefreshIndicator complete su animación
-    await Future<void>.delayed(const Duration(milliseconds: 120));
+    setState(() {
+      _future = _repo.all(orderBy: 'frequency ASC, type ASC, next_run ASC');
+    });
+    await _loadAccountsCache();
   }
+
 
   String _freqTitle(String f) {
     switch (f.toLowerCase()) {
       case 'weekly':
-        return tr('scheduled.freq_weekly');       // Trans. Semanales
+        return tr('scheduled.freq_weekly'); // Trans. Semanales
       case 'biweekly':
-        return tr('scheduled.freq_biweekly');     // Trans. Quincenales
+        return tr('scheduled.freq_biweekly'); // Trans. Quincenales
       case 'monthly':
-        return tr('scheduled.freq_monthly');      // Trans. Mensuales
+        return tr('scheduled.freq_monthly'); // Trans. Mensuales
       case 'quarterly':
-        return tr('scheduled.freq_quarterly');    // Trans. Trimestrales
+        return tr('scheduled.freq_quarterly'); // Trans. Trimestrales
       case 'semiannual':
-        return tr('scheduled.freq_semiannual');   // Trans. Semestrales
+        return tr('scheduled.freq_semiannual'); // Trans. Semestrales
       case 'annual':
-        return tr('scheduled.freq_annual');       // Trans. Anuales
+        return tr('scheduled.freq_annual'); // Trans. Anuales
       default:
-        return tr('scheduled.freq_generic');      // Trans. Recurrentes
+        return tr('scheduled.freq_generic'); // Trans. Recurrentes
     }
   }
 
@@ -102,7 +100,9 @@ class _ScheduledTransactionsScreenState extends State<ScheduledTransactionsScree
                 context,
                 MaterialPageRoute(builder: (_) => const EditScheduledTransactionScreen()),
               );
-              if (result == true) _reload(); // recarga inmediata al volver
+              if (result == true) {
+                await _reload(); // recarga inmediata al volver
+              }
             },
           ),
         ],
@@ -237,7 +237,9 @@ class _ScheduledTransactionsScreenState extends State<ScheduledTransactionsScree
                       context,
                       MaterialPageRoute(builder: (_) => EditScheduledTransactionScreen(transaction: s)),
                     );
-                    if (result == true) _reload();
+                    if (result == true) {
+                      await _reload(); // recarga después de editar
+                    }
                   },
                   activeOverrides: _activeOverrides,
                 );
@@ -249,6 +251,10 @@ class _ScheduledTransactionsScreenState extends State<ScheduledTransactionsScree
     );
   }
 }
+
+// Las clases _FrequencyGroupCard y _ScheduledItemTile permanecen igual,
+// no se modifican en este ajuste.
+
 
 class _FrequencyGroupCard extends StatelessWidget {
   final String title;

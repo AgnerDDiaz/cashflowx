@@ -142,7 +142,12 @@
   },
   "theme": { "system":"System default", "light":"Light", "dark":"Dark" },
 
-  "language": { "system":"System default" }
+  "language": { "system":"System default" },
+  "reset_db_title": "Reset database",
+  "reset_db_msg": "This will DELETE ALL local data and recreate a clean database with dev seeds (zeroed accounts, no transactions). Are you sure?",
+  "reset_db_subtitle": "Wipe and reseed (dev)",
+  "reset_db_done": "Database successfully reset",
+  "confirm": "Confirm"
 
 
 }

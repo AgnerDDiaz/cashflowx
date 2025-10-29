@@ -97,8 +97,8 @@ class SettingsHelper {
     if (result.isNotEmpty && result.first['main_currency'] != null) {
       return result.first['main_currency'] as String;
     } else {
-      await setMainCurrency('DOP');
-      return 'DOP';
+      await setMainCurrency('USD'); // 👈 antes estaba 'DOP'
+      return 'USD';
     }
   }
 
