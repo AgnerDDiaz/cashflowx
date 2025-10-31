@@ -146,8 +146,9 @@ class _AccountGroupSectionState extends State<AccountGroupSection> {
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: DragTarget<Account>(
-        onWillAccept: (data) => true,
-        onAccept: (acc) async {
+        onWillAcceptWithDetails: (details) => true,                       // ✅
+        onAcceptWithDetails: (details) async {                            // ✅
+          final acc = details.data;
           if (widget.onMoveToGroup != null) {
             await widget.onMoveToGroup!(acc);
           }
@@ -252,7 +253,7 @@ class _AccountGroupSectionState extends State<AccountGroupSection> {
       );
 
       return LongPressDraggable<Account>(
-        key: ValueKey('acc_${a.id}'),
+        key: ValueKey('acc_${a.id}'),   // ✅ requerido por ReorderableListView
         data: a,
         feedback: Material(
           color: Colors.transparent,
@@ -264,11 +265,13 @@ class _AccountGroupSectionState extends State<AccountGroupSection> {
         childWhenDragging: Opacity(opacity: 0.3, child: tile),
         child: tile,
       );
+      
     });
 
     return DragTarget<Account>(
-      onWillAccept: (a) => true,
-      onAccept: (a) async {
+      onWillAcceptWithDetails: (details) => true,                       // ✅
+      onAcceptWithDetails: (details) async {                            // ✅
+        final a = details.data;
         if (!widget.accounts.any((x) => x.id == a.id)) {
           await widget.onMoveToGroup?.call(a);
           setState(() {});
@@ -290,6 +293,7 @@ class _AccountGroupSectionState extends State<AccountGroupSection> {
         );
       },
     );
+
   }
 
   Widget _buildCards(BuildContext context) {

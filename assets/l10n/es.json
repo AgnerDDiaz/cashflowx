@@ -161,7 +161,16 @@
   "available_credit": "Crédito disponible",
   "pays_on": "Paga el {day}",
   "not_counted": "No suma al total",
-  "hidden": "Oculta"
+  "hidden": "Oculta",
+  "order_groups": "Ordenar grupos",
+  "new_group": "Nuevo grupo",
+  "group_name": "Nombre del grupo",
+  "group_placeholder": "Ej. Ahorros",
+  "confirm_delete_group": "¿Estás seguro de eliminar este grupo?",
+  "delete_group_warning": "Se moverán sus cuentas al grupo \"General\".",
+  "no_accounts_here": "Sin cuentas aquí aún",
+  "write_a_name": "Escribe un nombre."
+
 
 
 

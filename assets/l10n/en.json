@@ -164,9 +164,16 @@
   "available_credit": "Available credit",
   "pays_on": "Pay on {day}",
   "not_counted": "Not counted",
-  "hidden": "Hidden"
+  "hidden": "Hidden",
 
-
+  "order_groups": "Reorder groups",
+  "new_group": "New group",
+  "group_name": "Group name",
+  "group_placeholder": "E.g. Savings",
+  "confirm_delete_group": "Are you sure you want to delete this group?",
+  "delete_group_warning": "Its accounts will be moved to the \"General\" group.",
+  "no_accounts_here": "No accounts here yet",
+  "write_a_name": "Please enter a name."
 
 }
 
