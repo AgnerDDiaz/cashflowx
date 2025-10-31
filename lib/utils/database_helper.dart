@@ -1,10 +1,8 @@
 // lib/utils/database_helper.dart
-import 'dart:io';
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode
-import 'package:path_provider/path_provider.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -25,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 13, // v13: credit_cards_meta + semillas USD/EUR/DOP + cuentas en 0 (solo dev) + sin transacciones de prueba
+      version: 15, // v14: agrega/rellena cutoff_date & due_date para TC + meta; mantiene v13 intacta
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -49,14 +47,14 @@ class DatabaseHelper {
       );
     ''');
 
-    // Crear grupo por defecto "General"
+    // Grupo por defecto "General"
     await db.insert(
       'account_groups',
       {'name': 'General', 'sort_order': 0},
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
 
-    // accounts (SIN category/intereses/penalidades)
+    // accounts
     await db.execute('''
       CREATE TABLE accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,18 +63,19 @@ class DatabaseHelper {
         balance REAL NOT NULL,
         currency TEXT NOT NULL,
         balance_mode TEXT NOT NULL CHECK (balance_mode IN ('debit','credit','default')) DEFAULT 'default',
-        due_date TEXT DEFAULT NULL,
-        cutoff_date TEXT DEFAULT NULL,
+        due_date TEXT DEFAULT NULL,       -- día de pago (1..28) o 'YYYY-MM-DD'
+        cutoff_date TEXT DEFAULT NULL,    -- día de corte (1..28) o 'YYYY-MM-DD'
         max_credit REAL DEFAULT NULL,
         visible INTEGER DEFAULT 1,
         include_in_balance INTEGER DEFAULT 1,
         group_id INTEGER,
+        sort_order INTEGER DEFAULT 0
         FOREIGN KEY (group_id) REFERENCES account_groups(id) ON DELETE SET NULL
       );
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts(group_id);');
 
-    // Triggers para garantizar group_id (si viene NULL → "General")
+    // Triggers: si group_id viene NULL => "General"
     await db.execute('''
     CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_insert
     AFTER INSERT ON accounts
@@ -124,9 +123,7 @@ class DatabaseHelper {
     ''');
     await db.execute("CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id);");
 
-    // -------------------------------
-    // scheduled_transactions (final)
-    // -------------------------------
+    // scheduled_transactions
     await db.execute('''
       CREATE TABLE IF NOT EXISTS scheduled_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,11 +147,10 @@ class DatabaseHelper {
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
       );
     ''');
-
     await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_active_next_run ON scheduled_transactions(is_active, next_run);');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_sched_next_run ON scheduled_transactions(next_run);');
 
-    // transactions (ahora con scheduled_id)
+    // transactions
     await db.execute('''
       CREATE TABLE transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,7 +192,7 @@ class DatabaseHelper {
       );
     ''');
 
-    // settings + fila por defecto (USD principal)
+    // settings + fila por defecto
     await db.execute('''
       CREATE TABLE settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,7 +213,7 @@ class DatabaseHelper {
     ''');
     await db.insert('settings', {
       'main_currency': 'USD',
-      'secondary_currency': 'DOP', // puedes cambiar a 'EUR' si prefieres
+      'secondary_currency': 'DOP',
       'first_day_of_week': 'Monday',
       'first_day_of_month': '1st',
       'default_view': 'weekly',
@@ -241,7 +237,7 @@ class DatabaseHelper {
       );
     ''');
 
-    // currency_names (SOLO 3 monedas)
+    // currency_names (catálogo mínimo)
     await db.execute('''
       CREATE TABLE currency_names (
         code TEXT PRIMARY KEY,
@@ -252,7 +248,7 @@ class DatabaseHelper {
     await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'});
     await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'});
 
-    // ---- NUEVO: Tabla de metadatos para tarjetas de crédito ----
+    // credit_cards_meta
     await db.execute('''
       CREATE TABLE IF NOT EXISTS credit_cards_meta (
         account_id INTEGER PRIMARY KEY,
@@ -265,16 +261,15 @@ class DatabaseHelper {
       );
     ''');
 
-    // categorías por defecto (mantén tu lógica actual)
+    // Categorías por defecto
     await insertCategoriesAndSubcategories(db);
 
-    // Tipos de cambio mínimos (USD↔EUR y USD↔DOP)
+    // Tipos de cambio mínimos
     await _seedBasicExchangeRates(db);
 
-    // ---- SEMILLAS SOLO DEV: grupos + mismas cuentas en 0.0 ----
+    // ---- Seeds SOLO DEV: grupos + CUENTAS en 0.0 (incluye tus 3 tarjetas) ----
     if (kDebugMode) {
       await insertDevGroupsAndZeroAccounts(db);
-      // No insertamos transacciones de prueba.
     }
   }
 
@@ -282,7 +277,6 @@ class DatabaseHelper {
   // onUpgrade: migraciones
   // -------------------------
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // v6
     if (oldVersion < 6) {
       await db.execute("ALTER TABLE settings ADD COLUMN secondary_currency TEXT DEFAULT 'USD';");
       await db.execute("ALTER TABLE settings ADD COLUMN theme_mode TEXT DEFAULT 'system';");
@@ -310,7 +304,6 @@ class DatabaseHelper {
       ''');
     }
 
-    // v7
     if (oldVersion < 7) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS scheduled_transactions (
@@ -352,7 +345,6 @@ class DatabaseHelper {
       } catch (_) {}
     }
 
-    // v8
     if (oldVersion < 8) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS account_groups (
@@ -363,9 +355,9 @@ class DatabaseHelper {
           collapsed INTEGER DEFAULT 0
         );
       ''');
-
       try { await db.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER;"); } catch (_) {}
 
+      // Este bloque suponía una columna 'category' legacy.
       final cats = await db.rawQuery('SELECT DISTINCT category FROM accounts WHERE category IS NOT NULL AND TRIM(category) <> ""');
       for (final row in cats) {
         final name = (row['category'] as String).trim();
@@ -388,7 +380,6 @@ class DatabaseHelper {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts(group_id);");
     }
 
-    // v9: reconstruir accounts SIN 'category' ni intereses/penalidades
     if (oldVersion < 9) {
       await db.execute('''
         CREATE TABLE accounts_new (
@@ -431,7 +422,6 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_accounts_group ON accounts(group_id);');
     }
 
-    // v10: default group + backfill + triggers
     if (oldVersion < 10) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS account_groups (
@@ -456,36 +446,34 @@ class DatabaseHelper {
       ''');
 
       await db.execute('''
-      CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_insert
-      AFTER INSERT ON accounts
-      FOR EACH ROW
-      WHEN NEW.group_id IS NULL
-      BEGIN
-        UPDATE accounts
-        SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
-        WHERE id = NEW.id;
-      END;
+        CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_insert
+        AFTER INSERT ON accounts
+        FOR EACH ROW
+        WHEN NEW.group_id IS NULL
+        BEGIN
+          UPDATE accounts
+          SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
+          WHERE id = NEW.id;
+        END;
       ''');
 
       await db.execute('''
-      CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_update
-      AFTER UPDATE ON accounts
-      FOR EACH ROW
-      WHEN NEW.group_id IS NULL
-      BEGIN
-        UPDATE accounts
-        SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
-        WHERE id = NEW.id;
-      END;
+        CREATE TRIGGER IF NOT EXISTS trg_accounts_default_group_after_update
+        AFTER UPDATE ON accounts
+        FOR EACH ROW
+        WHEN NEW.group_id IS NULL
+        BEGIN
+          UPDATE accounts
+          SET group_id = (SELECT id FROM account_groups WHERE name='General' LIMIT 1)
+          WHERE id = NEW.id;
+        END;
       ''');
     }
 
-    // v11: end_date en scheduled
     if (oldVersion < 11) {
       try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN end_date TEXT NULL;"); } catch (_) {}
     }
 
-    // v12: robustecer recurrencias + scheduled_id en transactions + índices
     if (oldVersion < 12) {
       try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;"); } catch (_) {}
       try { await db.execute("ALTER TABLE scheduled_transactions ADD COLUMN failed_count INTEGER NOT NULL DEFAULT 0;"); } catch (_) {}
@@ -504,7 +492,6 @@ class DatabaseHelper {
       ''');
     }
 
-    // v13: asegurar tabla credit_cards_meta y semillas de monedas reducidas
     if (oldVersion < 13) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS credit_cards_meta (
@@ -518,21 +505,83 @@ class DatabaseHelper {
         );
       ''');
 
-      // asegurar catálogo de monedas mínimo
       await db.insert('currency_names', {'code': 'USD', 'name': 'United States Dollar'}, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('currency_names', {'code': 'EUR', 'name': 'Euro'}, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('currency_names', {'code': 'DOP', 'name': 'Dominican Peso'}, conflictAlgorithm: ConflictAlgorithm.ignore);
 
-      // tipos de cambio mínimos
       await _seedBasicExchangeRates(db);
     }
+
+    if (oldVersion < 14) {
+      await db.execute("""
+        UPDATE accounts
+        SET cutoff_date = '10'
+        WHERE type = 'credit' AND (cutoff_date IS NULL OR TRIM(cutoff_date) = '');
+      """);
+
+      await db.execute("""
+        UPDATE accounts
+        SET due_date = '24'
+        WHERE type = 'credit' AND (due_date IS NULL OR TRIM(due_date) = '');
+      """);
+
+      await db.execute("""
+        CREATE TABLE IF NOT EXISTS credit_cards_meta (
+          account_id INTEGER PRIMARY KEY,
+          statement_day INTEGER NULL,
+          due_day INTEGER NULL,
+          statement_due REAL NOT NULL DEFAULT 0,
+          post_statement REAL NOT NULL DEFAULT 0,
+          credit_limit REAL NULL,
+          FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        );
+      """);
+
+      await db.execute("""
+        INSERT OR IGNORE INTO credit_cards_meta (account_id, statement_day, due_day, statement_due, post_statement, credit_limit)
+        SELECT id, NULL, NULL, 0.0, 0.0, max_credit
+        FROM accounts WHERE type = 'credit';
+      """);
+
+      await db.execute("""
+        UPDATE credit_cards_meta
+        SET statement_day = COALESCE(
+              statement_day,
+              CAST((SELECT cutoff_date FROM accounts WHERE accounts.id = credit_cards_meta.account_id) AS INTEGER)
+            ),
+            due_day = COALESCE(
+              due_day,
+              CAST((SELECT due_date FROM accounts WHERE accounts.id = credit_cards_meta.account_id) AS INTEGER)
+            ),
+            credit_limit = COALESCE(
+              credit_limit,
+              (SELECT max_credit FROM accounts WHERE accounts.id = credit_cards_meta.account_id)
+            )
+        WHERE account_id IN (SELECT id FROM accounts WHERE type = 'credit');
+      """);
+    }
+
+    if (oldVersion < 15) {
+      try { await db.execute("ALTER TABLE accounts ADD COLUMN sort_order INTEGER DEFAULT 0;"); } catch (_) {}
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_accounts_group_sort ON accounts(group_id, sort_order);");
+
+      // Inicializa sort_order por grupo según id ascendente
+      final rows = await db.rawQuery('SELECT id, group_id FROM accounts ORDER BY group_id, id');
+      int? currentGroup;
+      int order = 0;
+      for (final r in rows) {
+        final gid = r['group_id'] as int?;
+        if (gid != currentGroup) { currentGroup = gid; order = 0; }
+        await db.update('accounts', {'sort_order': order++}, where: 'id = ?', whereArgs: [r['id']]);
+      }
+    }
+
   }
 
   // -------------------------
   // Seeds / Helpers
   // -------------------------
 
-  /// Inserta categorías y subcategorías por defecto
   Future<void> insertCategoriesAndSubcategories(Database db) async {
     final defaultCategories = [
       {'name': 'Transporte', 'type': 'expense', 'parent_id': null},
@@ -548,7 +597,13 @@ class DatabaseHelper {
     }
 
     Future<int?> idOf(String name) async {
-      final r = await db.query('categories', columns: ['id'], where: 'name = ?', whereArgs: [name], limit: 1);
+      final r = await db.query(
+        'categories',
+        columns: ['id'],
+        where: 'name = ?',
+        whereArgs: [name],
+        limit: 1,
+      );
       return r.isNotEmpty ? r.first['id'] as int : null;
     }
 
@@ -580,9 +635,10 @@ class DatabaseHelper {
     }
   }
 
-  /// Inserta tipos de cambio mínimos (USD↔EUR y USD↔DOP), reemplazando/actualizando si existen.
+  /// Inserta tipos de cambio mínimos (USD↔EUR y USD↔DOP), reemplazando si existen.
   Future<void> _seedBasicExchangeRates(Database db) async {
     final today = DateTime.now().toIso8601String().substring(0, 10);
+
     Future<void> put(String base, String target, double rate) async {
       await db.insert(
         'exchange_rates',
@@ -605,20 +661,17 @@ class DatabaseHelper {
     await put('DOP', 'USD', 1 / usdToDop);
   }
 
-  /// Crea grupos y **las mismas cuentas** pero con **saldo 0.0** (solo en dev).
-  /// Ajusta los nombres/tipos/monedas a las que ya tienes para que coincidan.
+  /// Seeds DEV: grupos + cuentas en 0.0 (incluye 3 tarjetas con días distintos)
   Future<void> insertDevGroupsAndZeroAccounts(Database db) async {
     final names = ['Cuentas personales','Cuentas del negocio','Ahorros','Tarjetas de crédito','Deudas'];
     final gid = <String,int>{};
 
-    // Inserta grupos si no existen
     for (final n in names) {
       await db.insert('account_groups', {'name': n}, conflictAlgorithm: ConflictAlgorithm.ignore);
       final row = (await db.query('account_groups', where: 'name = ?', whereArgs: [n], limit: 1)).first;
       gid[n] = row['id'] as int;
     }
 
-    // MISMAS CUENTAS, PERO EN 0.0 (ajusta la lista según tus cuentas actuales)
     final accounts = [
       {
         'name': 'Cuenta Banreservas',
@@ -650,6 +703,8 @@ class DatabaseHelper {
         'include_in_balance': 1,
         'visible': 1,
       },
+
+      // ====== TARJETAS DE CRÉDITO ======
       {
         'name': 'Tarjeta gold Banreservas',
         'type': 'credit',
@@ -660,17 +715,21 @@ class DatabaseHelper {
         'max_credit': 50000.0,
         'include_in_balance': 1,
         'visible': 1,
+        'cutoff_date': '2',   // Corte
+        'due_date': '23',     // Pago
       },
       {
-        'name': 'Cuenta BHD (conjunta)',
+        'name': 'Tarjeta de Crédito en Dólares',
         'type': 'credit',
         'group_id': gid['Tarjetas de crédito'],
         'balance': 0.0,
-        'currency': 'DOP',
+        'currency': 'USD',
         'balance_mode': 'credit',
-        'max_credit': 10000.0,
+        'max_credit': 1000.0,
         'include_in_balance': 1,
         'visible': 1,
+        'cutoff_date': '10',  // Corte
+        'due_date': '28',     // Pago
       },
       {
         'name': 'Tarjeta de crédito personal',
@@ -682,7 +741,11 @@ class DatabaseHelper {
         'max_credit': 50000.0,
         'include_in_balance': 1,
         'visible': 1,
+        'cutoff_date': '7',   // Corte
+        'due_date': '1',      // Pago
       },
+      // ====== FIN TARJETAS ======
+
       {
         'name': 'Deuda a Eleanny',
         'type': 'debt',
@@ -705,19 +768,23 @@ class DatabaseHelper {
       },
     ];
 
-    // Insertar cuentas y cargar metadatos de tarjetas si aplica
     for (final a in accounts) {
       final accId = await db.insert('accounts', a);
       if (a['type'] == 'credit') {
+        final cut = a['cutoff_date']?.toString();
+        final due = a['due_date']?.toString();
+        final statementDay = cut == null ? null : int.tryParse(cut);
+        final dueDay = due == null ? null : int.tryParse(due);
+
         await db.insert(
           'credit_cards_meta',
           {
             'account_id': accId,
-            'statement_day': null,
-            'due_day': null,
-            'statement_due': 0.0,
-            'post_statement': 0.0,
-            'credit_limit': a['max_credit'],
+            'statement_day': statementDay,   // día de corte
+            'due_day': dueDay,               // día de pago
+            'statement_due': 0.0,            // este ciclo
+            'post_statement': 0.0,           // próximo ciclo
+            'credit_limit': a['max_credit'], // límite
           },
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
@@ -725,67 +792,13 @@ class DatabaseHelper {
     }
   }
 
-  /// Ruta absoluta del archivo SQLite actual.
-  Future<String> getDatabasePath() async {
-    return join(await getDatabasesPath(), 'cashflowx.db');
-  }
-
-  /// Exporta una copia del .db a un archivo temporal y la devuelve.
-  /// Úsalo para compartir/guardar con un picker del SO.
-  Future<String> exportDatabaseToTemp({String? fileName}) async {
-    final src = await getDatabasePath();
-    final tmpDir = await getTemporaryDirectory();
-    final name = fileName ?? 'cashflowx_backup_${DateTime.now().millisecondsSinceEpoch}.db';
-    final dst = join(tmpDir.path, name);
-
-    // Asegura que no haya conexiones pendientes al leer
-    await _database?.close();
-    _database = null;
-
-    await File(src).copy(dst);
-    // Reabrimos para que la app siga funcionando normalmente
-    await database;
-    return dst;
-  }
-
-  /// Restaura la base desde un archivo .db proporcionado (ruta absoluta).
-  /// Cierra la conexión, reemplaza el archivo y reabre.
-  Future<void> importDatabaseFrom(String backupPath) async {
-    final dst = await getDatabasePath();
-
-    // Cerrar conexión actual
-    if (_database != null && _database!.isOpen) {
-      await _database!.close();
-    }
-    _database = null;
-
-    // Reemplazar archivo
-    final backupFile = File(backupPath);
-    if (!await backupFile.exists()) {
-      throw Exception('Backup file not found');
-    }
-
-    // Validación muy simple de tamaño > 0 (evita sobrescribir con vacío)
-    final stat = await backupFile.stat();
-    if (stat.size <= 0) {
-      throw Exception('Backup file is empty');
-    }
-
-    // Copiar (sobreescribir)
-    await backupFile.copy(dst);
-
-    // Reabrir para que onUpgrade corra si la versión cambió
-    await database;
-  }
-
-
   // utilidades
   Future<void> closeDatabase() async {
     final db = await database;
     await db.close();
   }
 
-  /// Elimina el archivo de base de datos. Úsalo una sola vez para empezar limpio.
+  /// Elimina el archivo de base de datos. Úsalo una sola vez para empezar limpio (DEV).
   Future<void> resetDatabase() async {
     final path = join(await getDatabasesPath(), 'cashflowx.db');
     await deleteDatabase(path);

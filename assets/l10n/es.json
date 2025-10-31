@@ -154,7 +154,14 @@
   "backup_import_msg": "Esto reemplazará TODOS tus datos locales por el archivo seleccionado. ¿Deseas continuar?",
   "backup_import_done": "Respaldo importado correctamente",
   "backup_error_export": "Error al exportar el respaldo: ",
-  "backup_error_import": "Error al importar el respaldo: "
+  "backup_error_import": "Error al importar el respaldo: ",
+
+  "this_cycle": "Este ciclo",
+  "next_cycle": "Próximo ciclo",
+  "available_credit": "Crédito disponible",
+  "pays_on": "Paga el {day}",
+  "not_counted": "No suma al total",
+  "hidden": "Oculta"
 
 
 

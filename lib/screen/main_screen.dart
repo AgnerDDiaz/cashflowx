@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 
-// 🔁 Nueva arquitectura: usamos repos en vez de DatabaseHelper
+// 🔁 Repos
 import '../repositories/accounts_repository.dart';
 import '../repositories/categories_repository.dart';
 import '../repositories/transactions_repository.dart';
 
-// Modelos para mapear a Map<String,dynamic>
+// Modelos (para mantener List<Map<String,dynamic>> en memoria)
 import '../models/account.dart';
 import '../models/category.dart' as model;
 import '../models/transaction.dart';
 
-import 'dashboard_screen.dart';
+// Screens
+import 'dashboard_screen.dart' show DashboardScreen, DashboardScreenState;
 import 'reports_screen.dart';
-import 'accounts_screen.dart';
 import 'settings_screen.dart';
 import 'add_transaction_screen.dart';
 
-// Servicios que necesitan validacion al iniciar la app
-import '../services/scheduled_transactions_processor.dart';
+// Importa SOLO los símbolos necesarios para evitar choques
+import 'accounts_screen.dart' show AccountsScreen, AccountsScreenState;
 
+// Servicios que corren al iniciar
+import '../services/scheduled_transactions_processor.dart';
 
 class MainScreen extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
@@ -36,7 +38,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   late List<Map<String, dynamic>> _accounts;
@@ -48,32 +50,42 @@ class _MainScreenState extends State<MainScreen> {
   final _txRepo = TransactionsRepository();
   final _scheduledProcessor = ScheduledTransactionsProcessor();
 
-
   final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey();
-  final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey();
+  final GlobalKey<AccountsScreenState> _accountsKey = GlobalKey<AccountsScreenState>();
 
   @override
   void initState() {
     super.initState();
+
+
     _accounts = List<Map<String, dynamic>>.from(widget.accounts);
     _categories = List<Map<String, dynamic>>.from(widget.categories);
     _transactions = List<Map<String, dynamic>>.from(widget.transactions);
 
-    // Ejecutar el processor al inicio (no bloqueante)
+    // Observador de ciclo de vida
+    WidgetsBinding.instance.addObserver(this);
+
+    // Procesar transacciones programadas y cargar data al arrancar (no bloqueante del build)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _scheduledProcessor.runDue();
       await fetchData();
     });
-
-    // Escuchar cuando la app vuelve al foreground
-    WidgetsBinding.instance.addObserver(
-      LifecycleEventHandler(resumeCallBack: () async {
-        await _scheduledProcessor.runDue();
-        await fetchData();
-      }),
-    );
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Cuando la app vuelve al foreground
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed) {
+      await _scheduledProcessor.runDue();
+      await fetchData();
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -92,7 +104,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _onTabTapped(int index) async {
+  Future<void> _onTabTapped(int index) async {
     if (index == 2) {
       final result = await Navigator.push(
         context,
@@ -107,7 +119,7 @@ class _MainScreenState extends State<MainScreen> {
       if (result == true) {
         await fetchData();
         _dashboardKey.currentState?.reloadDashboard();
-        _accountsKey.currentState?.reloadAccounts();
+        _accountsKey.currentState?.reloadAccounts(); // ← necesita estar expuesto en AccountsScreenState
         setState(() => _currentIndex = 0);
       }
     } else {
@@ -115,7 +127,7 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  /// 🔄 Carga las listas usando los repos y las mantiene como List<Map> para no romper otras pantallas.
+  /// 🔄 Carga listas desde repos y mantiene List<Map> para no romper pantallas existentes
   Future<void> fetchData() async {
     // Accounts
     final accs = await _accountsRepo.getAll(); // List<Account>
@@ -138,23 +150,24 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> _pages = [
+    // (sin "_" para que el analizador no se queje por ser local)
+    final List<Widget> pages = [
       DashboardScreen(
         key: _dashboardKey,
         accounts: _accounts,
         categories: _categories,
         transactions: _transactions,
       ),
-      ReportsScreen(),
-      const SizedBox(), // slot para el FAB
+      const ReportsScreen(),
+      const SizedBox(), // slot del FAB
       AccountsScreen(
         key: _accountsKey,
       ),
-      SettingsScreen(),
+      const SettingsScreen(),
     ];
 
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).scaffoldBackgroundColor,
         shape: const CircularNotchedRectangle(),
@@ -176,7 +189,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               onPressed: () => _onTabTapped(1),
             ),
-            const SizedBox(width: 40), // Espacio para el FAB
+            const SizedBox(width: 40), // espacio del FAB
             IconButton(
               icon: Icon(
                 Icons.account_balance_wallet,
@@ -205,17 +218,3 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
-
-class LifecycleEventHandler extends WidgetsBindingObserver {
-  final Future<void> Function()? resumeCallBack;
-
-  LifecycleEventHandler({this.resumeCallBack});
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && resumeCallBack != null) {
-      resumeCallBack!();
-    }
-  }
-}
-

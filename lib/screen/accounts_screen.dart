@@ -1,140 +1,154 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-import '../utils/settings_helper.dart';
-import '../services/exchange_rate_service.dart';
-
-// Widgets existentes
-import '../widgets/account_widgets.dart';
+import '../services/totals_calculator.dart';
 import '../widgets/balance_section.dart';
+import '../widgets/account_group_section.dart';
 
-// Pantallas
-import 'account_detail_screen.dart';
-import 'account_editor_screen.dart';
-
-// Modelos / Repos
+import '../models/account_group.dart' show AccountGroup;
 import '../models/account.dart';
-import '../models/category.dart';
-import '../models/account_group.dart';
 
 import '../repositories/accounts_repository.dart';
-import '../repositories/categories_repository.dart';
-import '../repositories/account_groups_repository.dart';
+import '../repositories/account_groups_repository.dart' as groups_repo;
+
+import '../utils/settings_helper.dart';
+
+import 'account_detail_screen.dart';
+import 'account_editor_screen.dart';
+import 'groups_reorder_screen.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({Key? key}) : super(key: key);
 
   @override
-  State<AccountsScreen> createState() => AccountsScreenState();
+  AccountsScreenState createState() => AccountsScreenState();
 }
 
 class AccountsScreenState extends State<AccountsScreen> {
   final _accountsRepo = AccountsRepository();
-  final _categoriesRepo = CategoriesRepository();
-  final _groupsRepo = AccountGroupsRepository();
+  final _groupsRepo = groups_repo.AccountGroupsRepository();
+  bool _editMode = false;
 
   String mainCurrency = 'DOP';
-
-  // Trabajamos internamente con modelos
   List<Account> _accounts = [];
-  List<Category> _categories = [];
   List<AccountGroup> _groups = [];
 
   @override
   void initState() {
     super.initState();
-    _initializeData();
+    _init();
   }
 
-  Future<void> _initializeData() async {
+  void reloadAccounts() {
+    _reload();
+  }
+
+  Future<void> _init() async {
     mainCurrency = await SettingsHelper().getMainCurrency() ?? 'DOP';
     await _reload();
   }
 
   Future<void> _reload() async {
-    final accounts = await _accountsRepo.getAll();
-    final categories = await _categoriesRepo.getAll();
-    final groups = await _groupsRepo.getAll();
-
+    final accs = await _accountsRepo.getAll();
+    final groups = await _groupsRepo.allOrdered();
     if (!mounted) return;
     setState(() {
-      _accounts = accounts;
-      _categories = categories;
+      _accounts = accs;
       _groups = groups;
     });
   }
 
-  void reloadAccounts() => _reload();
+  // --------- Callbacks de edición ---------
 
-  // -------------------- Helpers de totales --------------------
-
-  Future<double> _convert(double amount, String currency) =>
-      ExchangeRateService.localConvert(amount, currency, mainCurrency);
-
-  /// Totales generales (sólo cuentas visibles + incluidas en balance)
-  Future<List<double>> _generalTotals() async {
-    double inc = 0.0;
-    double exp = 0.0;
-
-    for (final a in _accounts) {
-      if (a.visible == 1 && a.includeInBalance == 1) {
-        final converted = await _convert(a.balance, a.currency);
-        // No forzamos signo: dejamos el saldo tal cual y sumamos
-        if (converted >= 0) {
-          inc += converted;
-        } else {
-          exp += converted; // negativo
-        }
-      }
-    }
-    final total = inc + exp;
-    return [inc, exp, total];
+  Future<void> _onToggleInclude(Account a) async {
+    final include = a.includeInBalance == 1 ? false : true;
+    await _accountsRepo.toggleIncludeInBalance(accountId: a.id!, include: include);
+    await _reload();
   }
 
-  /// Total por grupo (muestra saldo sumado de cuentas visibles)
-  Future<double> _groupTotal(List<Account> groupAccounts) async {
-    double total = 0.0;
-    for (final a in groupAccounts) {
-      if (a.visible == 1) {
-        total += await _convert(a.balance, a.currency);
-      }
-    }
-    return total;
+  Future<void> _onDelete(Account a) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Eliminar cuenta'),
+        content: Text('¿Seguro que quieres eliminar "${a.name}"? Esta acción es permanente.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _accountsRepo.deleteAccount(a.id!);
+    await _reload();
   }
 
-  // -------------------- UI --------------------
+  Future<int?> _pickGroup(int? currentGroupId) async {
+    return await showDialog<int?>(
+      context: context,
+      builder: (_) {
+        return SimpleDialog(
+          title: const Text('Mover a grupo'),
+          children: _groups.map((g) {
+            return SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, g.id),
+              child: Row(
+                children: [
+                  if (g.id == currentGroupId) const Icon(Icons.check, size: 18) else const SizedBox(width: 18),
+                  const SizedBox(width: 8),
+                  Text(g.name),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Future<void> _onMoveToGroup(Account a) async {
+    final newGroupId = await _pickGroup(a.groupId);
+    if (newGroupId == null || newGroupId == a.groupId) return;
+    await _accountsRepo.moveToGroup(accountId: a.id!, groupId: newGroupId);
+    await _reload();
+  }
+
+  Future<void> _onReorderConfirmed(AccountGroup g, List<int> newOrderIds) async {
+    try {
+      await _accountsRepo.updateSortOrdersInGroup(g.id!, newOrderIds);
+      await _reload();
+    } catch (_) {
+      final others = _accounts.where((a) => (a.groupId ?? -1) != (g.id ?? -2)).toList();
+      final reorderedInGroup = _accounts
+          .where((a) => (a.groupId ?? -1) == (g.id ?? -2))
+          .toList()
+        ..sort((x, y) => newOrderIds.indexOf(x.id!).compareTo(newOrderIds.indexOf(y.id!)));
+      setState(() {
+        _accounts = [...others, ...reorderedInGroup];
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Mapa id->nombre de grupos y nombre por defecto si es null
-    final Map<int, String> groupNameById = {
-      for (final g in _groups) g.id!: g.name,
-    };
-    const defaultGroupName = 'General';
-
-    // Agrupar cuentas por nombre de grupo
-    final Map<String, List<Account>> groupMap = {};
-    for (final a in _accounts) {
-      final name = (a.groupId != null)
-          ? (groupNameById[a.groupId!] ?? defaultGroupName)
-          : defaultGroupName;
-      groupMap.putIfAbsent(name, () => []).add(a);
-    }
-
-    // Para widgets que todavía esperan Map en navegación
-    List<Map<String, dynamic>> _accountsAsMaps(List<Account> list) =>
-        list.map((a) => a.toMap()).toList();
-    final categoriesMaps = _categories.map((c) => c.toMap()).toList();
-    final allAccountsMaps = _accountsAsMaps(_accounts);
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('accounts'.tr(), style: Theme.of(context).textTheme.titleLarge),
+        title: Text('accounts'.tr()),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              // Si luego agregas modo edición/ordenar grupos, ponlo aquí
+            icon: Icon(_editMode ? Icons.close : Icons.edit),
+            tooltip: _editMode ? 'Cerrar edición' : 'Editar',
+            onPressed: () => setState(() => _editMode = !_editMode),
+          ),
+          IconButton(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Reordenar grupos',
+            onPressed: () async {
+              final changed = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => GroupsReorderScreen(groups: _groups)),
+              );
+              if (changed == true) _reload();
             },
           ),
           IconButton(
@@ -148,16 +162,13 @@ class AccountsScreenState extends State<AccountsScreen> {
             },
           ),
         ],
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
       ),
       body: RefreshIndicator(
         onRefresh: _reload,
         child: ListView(
           children: [
-            // Resumen general
-            FutureBuilder<List<double>>(
-              future: _generalTotals(),
+            FutureBuilder<(double inc, double exp, double total)>(
+              future: TotalsCalculator.generalTotals(_accounts, mainCurrency),
               builder: (context, snap) {
                 if (!snap.hasData) {
                   return const Padding(
@@ -165,97 +176,44 @@ class AccountsScreenState extends State<AccountsScreen> {
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
-                final inc = snap.data![0];
-                final exp = snap.data![1];
-                final total = snap.data![2];
-
+                final (inc, exp, total) = snap.data!;
                 return BalanceSection(
+                  title: 'accounts_summary'.tr(),
                   totalIncome: inc,
                   totalExpenses: exp,
                   totalBalance: total,
-                  title: 'accounts_summary'.tr(),
                   mainCurrency: mainCurrency,
                 );
               },
             ),
             const SizedBox(height: 8),
-
-            // Secciones por grupo
-            ...groupMap.entries.map((entry) {
-              final groupName = entry.key;
-              final accountsInGroup = entry.value;
-              final visible = accountsInGroup.where((a) => a.visible == 1).toList();
-
-              return FutureBuilder<double>(
-                future: _groupTotal(accountsInGroup),
-                builder: (context, snap) {
-                  final groupBalance = snap.data ?? 0.0;
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Puedes seguir usando tu header actual (cambia el label “category” por “group”)
-                      AccountCategoryHeader(
-                        category: groupName, // título de sección
-                        totalBalance: groupBalance,
-                        isHidden: visible.isEmpty,
-                        mainCurrency: mainCurrency,
+            ..._groups.map((g) {
+              final items = _accounts.where((a) => (a.groupId ?? -1) == (g.id ?? -2)).toList();
+              return AccountGroupSection(
+                group: g,
+                accounts: items,
+                mainCurrency: mainCurrency,
+                editMode: _editMode,
+                onTapAccount: (a) async {
+                  if (_editMode) return;
+                  final changed = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AccountDetailScreen(
+                        accountId: a.id!,
+                        accountName: a.name,
+                        accountCurrency: a.currency,
+                        accounts: _accounts.map((x) => x.toMap()).toList(),
+                        categories: const [],
                       ),
-
-                      // Tiles por cuenta
-                      ...accountsInGroup.map((a) {
-                        if (a.type == 'credit') {
-                          final remainingCredit = (a.maxCredit ?? 0) - (a.balance);
-                          return CreditCardTile(
-                            name: a.name,
-                            dueAmount: a.balance,
-                            remainingCredit: remainingCredit,
-                            currency: a.currency,
-                            visible: a.visible == 1,
-                            onTap: () async {
-                              final changed = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => AccountDetailScreen(
-                                    accountId: a.id!,
-                                    accountName: a.name,
-                                    accountCurrency: a.currency,
-                                    accounts: allAccountsMaps,
-                                    categories: categoriesMaps,
-                                  ),
-                                ),
-                              );
-                              if (changed == true) _reload();
-                            },
-                          );
-                        } else {
-                          return AccountTile(
-                            name: a.name,
-                            balance: a.balance,
-                            currency: a.currency,
-                            visible: a.visible == 1,
-                            onTap: () async {
-                              final changed = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => AccountDetailScreen(
-                                    accountId: a.id!,
-                                    accountName: a.name,
-                                    accountCurrency: a.currency,
-                                    accounts: allAccountsMaps,
-                                    categories: categoriesMaps,
-                                  ),
-                                ),
-                              );
-                              if (changed == true) _reload();
-                            },
-                          );
-                        }
-                      }).toList(),
-                      const SizedBox(height: 12),
-                    ],
+                    ),
                   );
+                  if (changed == true) _reload();
                 },
+                onToggleInclude: _onToggleInclude,
+                onDelete: _onDelete,
+                onMoveToGroup: _onMoveToGroup,
+                onReorderConfirmed: (ids) => _onReorderConfirmed(g, ids),
               );
             }).toList(),
           ],

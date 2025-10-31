@@ -72,6 +72,8 @@ class Account {
     'include_in_balance': includeInBalance,
   };
 
+  bool get includeInBalanceBool => includeInBalance == 1;
+
   Account copyWith({
     int? id,
     String? name,

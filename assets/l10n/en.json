@@ -157,7 +157,14 @@
   "backup_import_msg": "This will REPLACE ALL your local data with the selected file. Continue?",
   "backup_import_done": "Backup imported successfully",
   "backup_error_export": "Backup export failed: ",
-  "backup_error_import": "Backup import failed: "
+  "backup_error_import": "Backup import failed: ",
+
+  "this_cycle": "This cycle",
+  "next_cycle": "Next cycle",
+  "available_credit": "Available credit",
+  "pays_on": "Pay on {day}",
+  "not_counted": "Not counted",
+  "hidden": "Hidden"
 
 
 
